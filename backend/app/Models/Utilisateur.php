@@ -21,6 +21,7 @@ class Utilisateur extends Authenticatable
         'telephone',
         'password',
         'role',
+        'categorie_client', // AJOUTÉ — org_internationale / admin_ong / association_base (clients uniquement)
         'date_creation'
     ];
 

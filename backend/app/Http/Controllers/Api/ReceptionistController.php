@@ -10,49 +10,90 @@ use Illuminate\Http\Request;
 
 class ReceptionistController extends Controller
 {
+    /**
+     * ⚠ CORRIGÉ : dashboard() imbriquait des JsonResponse → objets vides.
+     */
+    public function dashboard()
+    {
+        return response()->json([
+            'stats' => $this->statsArray(),
+            'recentBookings' => $this->recentBookingsArray(),
+        ]);
+    }
+
     public function getStats()
     {
+        return response()->json($this->statsArray());
+    }
+
+    private function statsArray(): array
+    {
         $today = now()->toDateString();
-        
-        return response()->json([
+
+        return [
             'todayBookings' => Reservation::whereDate('date_debut', $today)->count(),
             'pendingBookings' => Reservation::where('statut', 'en_attente')->count(),
-            'completedBookings' => Reservation::where('statut', 'terminee')->count(),
+            // ⚠ CORRIGÉ : 'terminee' n'est jamais stocké — on compte les
+            // confirmées dont le créneau est passé.
+            'completedBookings' => Reservation::where('statut', 'confirmee')
+                ->where('date_fin', '<', now())->count(),
             'cancelledBookings' => Reservation::where('statut', 'annulee')->count(),
             'totalRooms' => Salle::count(),
             'occupancyRate' => $this->calculateOccupancyRate(),
-        ]);
+        ];
     }
 
     public function getChartData()
     {
         $data = [];
         $jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-        
+
         for ($i = 6; $i >= 0; $i--) {
             $date = now()->subDays($i);
-            $jour = $jours[now()->subDays($i)->dayOfWeekIso - 1];
-            
+            $jour = $jours[$date->dayOfWeekIso - 1];
+
             $data[] = [
                 'jour' => $jour,
+                // ⚠ CORRIGÉ : même raison — "effectuées" = confirmées dont
+                // la fin est passée, pas un statut 'terminee' inexistant.
                 'effectuees' => Reservation::whereDate('date_debut', $date->toDateString())
-                    ->where('statut', 'terminee')->count(),
+                    ->where('statut', 'confirmee')
+                    ->where('date_fin', '<', now())->count(),
                 'en_attente' => Reservation::whereDate('date_debut', $date->toDateString())
                     ->where('statut', 'en_attente')->count(),
                 'annulees' => Reservation::whereDate('date_debut', $date->toDateString())
                     ->where('statut', 'annulee')->count(),
             ];
         }
-        
+
         return response()->json($data);
     }
 
+    private function recentBookingsArray()
+    {
+        return Reservation::with(['client', 'salle'])
+            ->orderBy('date_creation', 'desc')
+            ->limit(10)
+            ->get();
+    }
+
+    public function getRecentBookings()
+    {
+        return response()->json($this->recentBookingsArray());
+    }
+
+    /**
+     * ⚠ CORRIGÉ : se basait sur la colonne brute `statut` (jamais mise à
+     * jour automatiquement) — utilise maintenant statut_effectif, cohérent
+     * avec l'affichage temps réel.
+     */
     private function calculateOccupancyRate()
     {
-        $total = Salle::count();
+        $salles = Salle::all();
+        $total = $salles->count();
         if ($total === 0) return 0;
-        
-        $occupied = Salle::where('statut', 'occupee')->count();
+
+        $occupied = $salles->filter(fn ($s) => $s->statut_effectif === 'occupee')->count();
         return round(($occupied / $total) * 100);
     }
 }

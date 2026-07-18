@@ -11,6 +11,19 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    /**
+     * Inscription publique — TOUJOURS en tant que 'client'.
+     *
+     * ⚠️ CORRIGÉ (faille de sécurité) : l'ancienne validation
+     * `'role' => 'sometimes|in:admin,receptionniste,caissier,client'`
+     * permettait à n'importe qui d'envoyer `"role": "admin"` dans le
+     * corps de la requête et de créer un compte administrateur, cette
+     * route étant publique (pas d'auth:sanctum). Le paramètre `role`
+     * n'est donc plus accepté ici du tout — il est forcé à 'client'.
+     * La création de comptes admin/receptionniste/caissier doit passer
+     * exclusivement par AdminController::storeUser() (protégée par
+     * le middleware role:admin).
+     */
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -19,7 +32,8 @@ class AuthController extends Controller
             'email' => 'required|email|unique:utilisateur,email',
             'telephone' => 'nullable|string|max:20',
             'password' => 'required|string|min:6|confirmed',
-            'role' => 'sometimes|in:admin,receptionniste,caissier,client',
+            // AJOUTÉ — obligatoire, puisque register() ne crée que des clients
+            'categorie_client' => 'required|in:org_internationale,admin_ong,association_base',
         ]);
 
         $user = Utilisateur::create([
@@ -28,7 +42,8 @@ class AuthController extends Controller
             'email' => $validated['email'],
             'telephone' => $validated['telephone'] ?? null,
             'password' => Hash::make($validated['password']),
-            'role' => $validated['role'] ?? 'client',
+            'role' => 'client', // forcé, plus jamais pris depuis la requête
+            'categorie_client' => $validated['categorie_client'],
             'date_creation' => now(),
         ]);
 
@@ -55,6 +70,7 @@ class AuthController extends Controller
         }
 
         $user = Auth::user();
+        /** @var \App\Models\Utilisateur $user */
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -78,12 +94,16 @@ class AuthController extends Controller
     public function updateProfile(Request $request)
     {
         $user = Auth::user();
+        /** @var \App\Models\Utilisateur $user */
 
         $validated = $request->validate([
             'nom' => 'sometimes|string|max:100',
             'prenom' => 'sometimes|string|max:100',
             'email' => 'sometimes|email|unique:utilisateur,email,' . $user->id_utilisateur . ',id_utilisateur',
             'telephone' => 'nullable|string|max:20',
+            // Pas de categorie_client ici, volontairement : seul l'admin
+            // peut la modifier après coup (AdminController::updateUser),
+            // pas le client lui-même.
         ]);
 
         $user->update($validated);
@@ -97,6 +117,7 @@ class AuthController extends Controller
     public function changePassword(Request $request)
     {
         $user = Auth::user();
+        /** @var \App\Models\Utilisateur $user */
 
         $validated = $request->validate([
             'oldPassword' => 'required|string',
@@ -118,6 +139,7 @@ class AuthController extends Controller
     public function deleteAccount(Request $request)
     {
         $user = Auth::user();
+        /** @var \App\Models\Utilisateur $user */
 
         $validated = $request->validate([
             'password' => 'required|string',

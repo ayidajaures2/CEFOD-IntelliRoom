@@ -1,204 +1,77 @@
-﻿// src/pages/client/Dashboard.jsx
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
-import axios from 'axios';
-import { FiCalendar, FiList, FiUser, FiPlus, FiClock } from 'react-icons/fi';
+import { useCallback, useState } from "react";
+import { Link } from "react-router-dom";
+import { fetchMyBookings } from "../../api/bookingApi";
+import { useAuth } from "../../hooks/useAuth";
+import { usePolling } from "../../hooks/usePolling";
+import PageHeader from "../../components/common/PageHeader";
+import Loader from "../../components/common/Loader";
+import StatutBadge from "../../components/common/StatutBadge";
+import { formatDateTime } from "../../utils/formatDate";
+import { CATEGORIE_CLIENT_LABELS } from "../../utils/constants";
 
-function Dashboard() {
+export default function ClientDashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState({
-    totalBookings: 0,
-    upcomingBookings: 0,
-    completedBookings: 0
-  });
+  const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [recentBookings, setRecentBookings] = useState([]);
 
-  useEffect(() => {
-    const fetchClientData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        
-        if (!token) {
-          setError('Vous devez être connecté');
-          setLoading(false);
-          return;
-        }
-
-        // Récupérer les réservations du client
-        const response = await axios.get('/api/client/bookings', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        const bookings = response.data || [];
-        
-        // Calculer les statistiques
-        const total = bookings.length;
-        const upcoming = bookings.filter(b => 
-          b.statut === 'en_attente' || b.statut === 'validee'
-        ).length;
-        const completed = bookings.filter(b => 
-          b.statut === 'terminee'
-        ).length;
-
-        setStats({
-          totalBookings: total,
-          upcomingBookings: upcoming,
-          completedBookings: completed
-        });
-
-        // Récupérer les 5 dernières réservations
-        const recent = bookings.slice(0, 5).map(b => ({
-          id: b.id_reservation,
-          salle: b.salle?.libelle_salle || 'Salle inconnue',
-          date: new Date(b.date_debut).toLocaleDateString('fr-FR'),
-          statut: b.statut
-        }));
-
-        setRecentBookings(recent);
-        
-      } catch (err) {
-        console.error('Erreur lors du chargement des données client:', err);
-        setError(err.response?.data?.message || 'Erreur lors du chargement de vos réservations');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchClientData();
+  const load = useCallback(async () => {
+    try {
+      const { data } = await fetchMyBookings();
+      setBookings(Array.isArray(data) ? data : data.data ?? []);
+    } catch { /* le tableau de bord reste consultable */ }
+    finally { setLoading(false); }
   }, []);
+  usePolling(load, 15000);
 
-  // Fonction pour obtenir le badge de statut
-  const getStatusBadge = (statut) => {
-    const config = {
-      en_attente: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: '⏳ En attente' },
-      validee: { bg: 'bg-blue-100', text: 'text-blue-800', label: '🔵 Validée' },
-      confirmee: { bg: 'bg-purple-100', text: 'text-purple-800', label: '🟣 Confirmée' },
-      terminee: { bg: 'bg-green-100', text: 'text-green-800', label: '✅ Terminée' },
-      annulee: { bg: 'bg-red-100', text: 'text-red-800', label: '❌ Annulée' }
-    };
-    return config[statut] || config.en_attente;
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-        <p className="text-red-600 font-medium">❌ {error}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="mt-4 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition"
-        >
-          Réessayer
-        </button>
-      </div>
-    );
-  }
+  const upcoming = bookings
+    .filter((b) => ["validee", "confirmee", "en_attente"].includes(b.statut))
+    .slice(0, 5);
+  const toPay = bookings.filter((b) => b.statut === "validee").length;
+  const pending = bookings.filter((b) => b.statut === "en_attente").length;
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Bonjour, {user?.prenom} {user?.nom} 👋
-          </h1>
-          <p className="text-gray-600 mt-1">Bienvenue sur votre espace client</p>
-        </div>
-        <Link
-          to="/bookings/new"
-          className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition"
-        >
-          <FiPlus className="w-5 h-5" />
-          Nouvelle réservation
-        </Link>
+    <>
+      <PageHeader
+        eyebrow="Espace client"
+        title={`Bonjour, ${user?.prenom ?? ""}`}
+        subtitle={user?.categorie_client ? `Catégorie tarifaire : ${CATEGORIE_CLIENT_LABELS[user.categorie_client]}` : undefined}
+        actions={<Link to="/client/reserver" className="btn-primary">Réserver une salle</Link>}
+      />
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        {[
+          ["Réservations", bookings.length, "/client/reservations"],
+          ["En attente de validation", pending, "/client/reservations"],
+          ["À payer", toPay, "/client/reservations"],
+        ].map(([label, value, to]) => (
+          <Link key={label} to={to} className="card p-5 transition-shadow hover:shadow-md">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">{label}</p>
+            <p className="mt-1 font-display text-3xl font-black text-accent-dark">{loading ? "…" : value}</p>
+          </Link>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Total réservations</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.totalBookings}</p>
-            </div>
-            <div className="bg-orange-100 p-3 rounded-full">
-              <FiList className="w-6 h-6 text-orange-500" />
-            </div>
-          </div>
+      <section className="card p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-lg font-bold">Réservations à venir</h2>
+          <Link to="/client/reservations" className="text-sm font-medium text-accent hover:text-accent-dark">Tout voir</Link>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Réservations à venir</p>
-              <p className="text-3xl font-bold text-green-600">{stats.upcomingBookings}</p>
-            </div>
-            <div className="bg-green-100 p-3 rounded-full">
-              <FiCalendar className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Réservations terminées</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.completedBookings}</p>
-            </div>
-            <div className="bg-gray-100 p-3 rounded-full">
-              <FiClock className="w-6 h-6 text-gray-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Réservations récentes</h2>
-        </div>
-        <div className="p-6">
-          {recentBookings.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">Aucune réservation trouvée</p>
-              <Link to="/bookings/new" className="text-orange-500 hover:text-orange-600 font-medium mt-2 inline-block">
-                Faire une réservation →
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {recentBookings.map((booking) => {
-                const status = getStatusBadge(booking.statut);
-                return (
-                  <div key={booking.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">{booking.salle}</p>
-                      <p className="text-sm text-gray-500">{booking.date}</p>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${status.bg} ${status.text}`}>
-                      {status.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {recentBookings.length > 0 && (
-            <div className="mt-4 text-center">
-              <Link to="/my-bookings" className="text-orange-500 hover:text-orange-600 font-medium">
-                Voir toutes mes réservations →
-              </Link>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+        {loading ? <Loader /> : upcoming.length === 0 ? (
+          <p className="py-6 text-center text-sm text-ink/45">Aucune réservation en cours.</p>
+        ) : (
+          <ul className="divide-y divide-ink/5">
+            {upcoming.map((b) => (
+              <li key={b.id_reservation} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                <div>
+                  <p className="font-medium">{b.salle?.nom_salle ?? `Salle #${b.id_salle}`}</p>
+                  <p className="text-xs text-ink/50">{formatDateTime(b.date_debut)} → {formatDateTime(b.date_fin)}</p>
+                </div>
+                <StatutBadge statut={b.statut_effectif ?? b.statut} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
   );
 }
-
-export default Dashboard;

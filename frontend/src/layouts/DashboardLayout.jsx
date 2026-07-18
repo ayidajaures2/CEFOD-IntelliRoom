@@ -1,156 +1,179 @@
-﻿// src/components/DashboardLayout.jsx
-import { useState, useEffect } from 'react';
-import { Outlet, Link } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { 
-  FiHome, FiCalendar, FiList, FiUser, FiSettings, 
-  FiUsers, FiSun, FiMoon, FiUserPlus, FiBookOpen
-} from 'react-icons/fi';
+import { useCallback, useState } from "react";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
+import { usePolling } from "../hooks/usePolling";
+import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from "../api/notificationApi";
+import { ROLES, ROLE_LABELS } from "../utils/constants";
+import { formatDateTime } from "../utils/formatDate";
 
-function DashboardLayout() {
-  const { user } = useAuth();
-  const role = user?.role || 'client';
+const NAV_BY_ROLE = {
+  [ROLES.CLIENT]: [
+    { to: "/client", label: "Tableau de bord", end: true },
+    { to: "/client/reserver", label: "Réserver une salle" },
+    { to: "/client/reservations", label: "Mes réservations" },
+    { to: "/client/factures", label: "Mes factures" },
+    { to: "/client/messages", label: "Messagerie" },
+    { to: "/client/profil", label: "Mon profil" },
+  ],
+  [ROLES.RECEPTIONNISTE]: [
+    { to: "/reception", label: "Tableau de bord", end: true },
+    { to: "/reception/reservations", label: "Réservations" },
+    { to: "/reception/conversations", label: "Messagerie clients" },
+    { to: "/reception/factures", label: "Factures" },
+  ],
+  [ROLES.CAISSIER]: [
+    { to: "/caisse", label: "Tableau de bord", end: true },
+    { to: "/caisse/paiements", label: "Paiements" },
+  ],
+  [ROLES.ADMIN]: [
+    { to: "/admin", label: "Tableau de bord", end: true },
+    { to: "/admin/salles", label: "Salles & tarifs" },
+    { to: "/admin/utilisateurs", label: "Utilisateurs" },
+    { to: "/admin/rapports", label: "Rapports" },
+    { to: "/admin/parametres", label: "Paramètres" },
+  ],
+};
 
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    return saved || 'light';
-  });
+export default function DashboardLayout() {
+  const { user, role, logout } = useAuth();
+  const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
 
-  useEffect(() => {
-    localStorage.setItem('theme', theme);
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+  const loadNotifications = useCallback(async () => {
+    try {
+      const { data } = await fetchNotifications();
+      setNotifications(Array.isArray(data) ? data : data.data ?? []);
+    } catch {
+      /* notifications non bloquantes */
     }
-  }, [theme]);
+  }, []);
+  usePolling(loadNotifications, 15000);
 
-  const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
+  const isRead = (n) => n.est_lu === true || n.est_lu === 1 || n.est_lu === "1" || n.est_lu === "true";
+  const unread = notifications.filter((n) => !isRead(n)).length;
+
+  const handleRead = async (n) => {
+    if (!isRead(n)) {
+      try { await markNotificationRead(n.id_notification); } catch { /* silencieux */ }
+      loadNotifications();
+    }
   };
 
-  const getIcon = (to) => {
-    const icons = {
-      '/dashboard': <FiHome className="w-5 h-5" />,
-      '/bookings/new': <FiCalendar className="w-5 h-5" />,
-      '/my-bookings': <FiList className="w-5 h-5" />,
-      '/profile': <FiUser className="w-5 h-5" />,
-      '/receptionist': <FiHome className="w-5 h-5" />,
-      '/receptionist/bookings': <FiCalendar className="w-5 h-5" />,
-      '/cashier': <FiHome className="w-5 h-5" />,
-      '/admin': <FiHome className="w-5 h-5" />,
-      '/admin/rooms': <FiBookOpen className="w-5 h-5" />,
-      '/admin/users': <FiUsers className="w-5 h-5" />,
-      '/admin/settings': <FiSettings className="w-5 h-5" />,
-    };
-    return icons[to] || <FiHome className="w-5 h-5" />;
+  const handleReadAll = async () => {
+    const unreadIds = notifications.filter((n) => !isRead(n)).map((n) => n.id_notification);
+    try { await markAllNotificationsRead(unreadIds); } catch { /* silencieux */ }
+    loadNotifications();
   };
 
-  const links = {
-    client: [
-      { to: '/dashboard', label: 'Tableau de bord' },
-      { to: '/bookings/new', label: 'Nouvelle réservation' },
-      { to: '/my-bookings', label: 'Mes réservations' },
-      { to: '/profile', label: 'Mon profil' },
-    ],
-    receptionist: [
-      { to: '/receptionist', label: 'Tableau de bord' },
-      { to: '/receptionist/bookings', label: 'Gérer les réservations' },
-      { to: '/profile', label: 'Mon profil' },
-    ],
-    cashier: [
-      { to: '/cashier', label: 'Tableau de bord' },
-      { to: '/profile', label: 'Mon profil' },
-    ],
-    admin: [
-      { to: '/admin', label: 'Tableau de bord' },
-      { to: '/admin/rooms', label: 'Gérer les salles' },
-      { to: '/admin/users', label: 'Gérer les utilisateurs' },
-      { to: '/admin/settings', label: 'Configuration' },
-      { to: '/profile', label: 'Mon profil' },
-    ],
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
   };
 
-  const currentLinks = links[role] || links.client;
-  const isDark = theme === 'dark';
+  const links = NAV_BY_ROLE[role] ?? [];
+  const linkClass = ({ isActive }) =>
+    `flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+      isActive ? "bg-accent text-paper" : "text-paper/65 hover:bg-paper/10 hover:text-paper"
+    }`;
 
   return (
-    <div className={`flex min-h-screen ${isDark ? 'bg-black' : 'bg-white'}`}>
-      <aside className={`
-        w-64 p-4 flex flex-col fixed h-full border-r
-        ${isDark ? 'bg-black text-white border-gray-700' : 'bg-white text-gray-800 border-gray-200'}
-      `}>
-        <div className="mb-8 mt-2 px-3">
-          <h1 className="text-2xl font-bold">
-            <span className={isDark ? 'text-white' : 'text-gray-900'}>CEFOD Intell</span>
-            <span className="text-orange-500">i</span>
-            <span className={isDark ? 'text-white' : 'text-gray-900'}>Room</span>
-          </h1>
-          <p className={`text-xs mt-1 ${isDark ? 'text-white' : 'text-gray-500'}`}>
-            Espace {role}
-          </p>
-        </div>
+    <div className="flex min-h-screen bg-ink/[0.03]">
+      {/* Barre latérale */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-ink p-4 text-paper transition-transform lg:static lg:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+        aria-label="Menu de l'espace"
+      >
+        <Link to="/" className="mb-6 flex items-center gap-2.5 px-1">
+          <span className="grid h-8 w-8 grid-cols-2 gap-0.5 rounded-md bg-paper/10 p-1" aria-hidden="true">
+            <span className="rounded-sm bg-accent" /><span className="rounded-sm bg-paper" />
+            <span className="rounded-sm bg-paper" /><span className="rounded-sm bg-accent" />
+          </span>
+          <span className="font-display font-bold">CEFOD <span className="text-accent">IntelliRoom</span></span>
+        </Link>
 
-        <nav className="flex-1 space-y-1">
-          {currentLinks.map(link => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className={`
-                flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group
-                ${isDark 
-                  ? 'text-white hover:text-white hover:bg-orange-600' 
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-orange-100'
-                }
-              `}
-            >
-              <span className={`transition-colors ${isDark ? 'text-white group-hover:text-white' : 'text-gray-500 group-hover:text-orange-600'}`}>
-                {getIcon(link.to)}
-              </span>
-              <span className="font-medium">{link.label}</span>
-            </Link>
+        <nav className="flex flex-1 flex-col gap-1">
+          {links.map((l) => (
+            <NavLink key={l.to} to={l.to} end={l.end} className={linkClass} onClick={() => setSidebarOpen(false)}>
+              {l.label}
+            </NavLink>
           ))}
         </nav>
 
-        <div className={`border-t pt-4 mt-4 ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className={`w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center font-bold text-sm ${isDark ? 'text-black' : 'text-white'}`}>
-              {user?.prenom?.charAt(0) || 'U'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                {user?.prenom} {user?.nom}
-              </p>
-              <p className={`text-xs truncate ${isDark ? 'text-white' : 'text-gray-500'}`}>
-                {user?.email}
-              </p>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      <main className={`flex-1 ml-64 p-8 min-h-screen ${isDark ? 'bg-black' : 'bg-gray-50'}`}>
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={toggleTheme}
-            className={`p-2 rounded-lg transition ${
-              isDark 
-                ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            {isDark ? <FiSun className="w-5 h-5" /> : <FiMoon className="w-5 h-5" />}
+        <div className="mt-4 border-t border-paper/10 pt-4">
+          <p className="truncate px-1 text-sm font-semibold">{user?.prenom} {user?.nom}</p>
+          <p className="px-1 text-xs text-accent">{ROLE_LABELS[role]}</p>
+          <button onClick={handleLogout} className="btn mt-3 w-full justify-start px-3 py-2 text-paper/65 hover:bg-paper/10 hover:text-paper">
+            ← Se déconnecter
           </button>
         </div>
+      </aside>
+      {sidebarOpen && (
+        <button className="fixed inset-0 z-30 bg-ink/50 lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Fermer le menu" />
+      )}
 
-        <div className={isDark ? 'text-white' : 'text-gray-900'}>
-          <div className="max-w-7xl mx-auto">
-            <Outlet />
+      {/* Contenu */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-ink/10 bg-paper px-4 lg:px-8">
+          <button className="btn-ghost px-2 lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu">☰</button>
+          <Link to="/salles" className="hidden text-sm text-ink/55 hover:text-accent sm:block">← Retour au site public</Link>
+
+          <div className="relative">
+            <button
+              className="btn-ghost relative px-3"
+              onClick={() => setNotifOpen((o) => !o)}
+              aria-expanded={notifOpen}
+              aria-label={`Notifications (${unread} non lues)`}
+            >
+              🔔
+              {unread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-paper">
+                  {unread}
+                </span>
+              )}
+            </button>
+            {notifOpen && (
+              <div className="absolute right-0 mt-2 w-80 overflow-hidden rounded-xl border border-ink/10 bg-paper shadow-xl">
+                <div className="flex items-center justify-between border-b border-ink/5 px-4 py-2.5">
+                  <p className="text-sm font-semibold">Notifications</p>
+                  {unread > 0 && (
+                    <button onClick={handleReadAll} className="text-xs font-medium text-accent hover:text-accent-dark">Tout marquer lu</button>
+                  )}
+                </div>
+                <ul className="max-h-80 overflow-y-auto">
+                  {notifications.length === 0 && (
+                    <li className="px-4 py-6 text-center text-sm text-ink/45">Aucune notification.</li>
+                  )}
+                  {notifications.map((n) => (
+                    <li key={n.id_notification}>
+                      <button
+                        onClick={() => handleRead(n)}
+                        className={`block w-full px-4 py-3 text-left text-sm hover:bg-accent-soft/60 ${isRead(n) ? "text-ink/50" : ""}`}
+                      >
+                        <span className="flex items-start gap-2">
+                          {!isRead(n) && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true" />}
+                          <span>
+                            <span className="block font-medium">{n.titre}</span>
+                            <span className="block text-xs text-ink/50">{n.contenu}</span>
+                            <span className="block pt-0.5 text-[11px] text-ink/35">{formatDateTime(n.date_creation)}</span>
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-        </div>
-      </main>
+        </header>
+
+        <main className="flex-1 px-4 py-6 lg:px-8">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
-
-export default DashboardLayout;

@@ -27,6 +27,9 @@ class Reservation extends Model
         'date_fin' => 'datetime',
     ];
 
+    // Ajoute automatiquement statut_effectif dans le JSON renvoyé par l'API
+    protected $appends = ['statut_effectif'];
+
     public function salle()
     {
         return $this->belongsTo(Salle::class, 'id_salle');
@@ -45,5 +48,34 @@ class Reservation extends Model
     public function paiement()
     {
         return $this->hasOne(Paiement::class, 'id_reservation');
+    }
+
+    /**
+     * Le statut stocké en base (`statut`) ne connaît que :
+     * en_attente, validee, confirmee, annulee.
+     *
+     * "en_cours" et "terminee" ne sont JAMAIS écrits en base : ils sont
+     * déduits en comparant date_debut/date_fin à l'heure actuelle, à
+     * chaque fois que la réservation est sérialisée en JSON. Pas de
+     * tâche planifiée (cron) nécessaire.
+     */
+    public function getStatutEffectifAttribute()
+    {
+        if ($this->statut !== 'confirmee') {
+            // en_attente, validee, annulee restent tels quels
+            return $this->statut;
+        }
+
+        $now = now();
+
+        if ($now->lt($this->date_debut)) {
+            return 'confirmee'; // payée, créneau pas encore commencé
+        }
+
+        if ($now->between($this->date_debut, $this->date_fin)) {
+            return 'en_cours';
+        }
+
+        return 'terminee'; // heure de fin dépassée
     }
 }

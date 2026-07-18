@@ -8,34 +8,54 @@ use App\Models\Notification;
 use App\Models\Utilisateur;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class BookingController extends Controller
 {
+    // ==========================================
     // CLIENT
+    // ==========================================
+
     public function clientBookings()
     {
         $user = Auth::user();
         return response()->json(
             Reservation::where('id_client', $user->id_utilisateur)
-                ->with(['salle', 'paiement'])
+                // ⚠ AJOUT : salle.tarifs pour que le client voie le prix
+                // final AVANT de payer (modal de paiement du frontend).
+                ->with(['salle.tarifs', 'paiement'])
                 ->orderBy('date_creation', 'desc')
                 ->get()
         );
     }
 
+    /**
+     * ⚠ CORRIGÉ : cette méthode est aussi montée sur
+     * POST /receptionist/bookings ("créer une réservation au nom d'un
+     * client"), mais elle utilisait systématiquement Auth::id() comme
+     * id_client — une réservation créée par la réceptionniste lui était
+     * attribuée À ELLE. Le personnel peut désormais passer un id_client ;
+     * un client, lui, ne peut réserver que pour lui-même.
+     */
     public function store(Request $request)
     {
         $user = Auth::user();
+        $isStaff = in_array($user->role, ['receptionniste', 'admin'], true);
 
         $validated = $request->validate([
             'id_salle' => 'required|exists:salle,id_salle',
             'date_debut' => 'required|date|after:now',
             'date_fin' => 'required|date|after:date_debut',
             'motif' => 'nullable|string|max:255',
+            'id_client' => ($isStaff ? 'sometimes' : 'prohibited') . '|exists:utilisateur,id_utilisateur',
         ]);
 
-        // Vérifier les conflits
+        $idClient = $isStaff && isset($validated['id_client'])
+            ? $validated['id_client']
+            : $user->id_utilisateur;
+
         $conflict = Reservation::where('id_salle', $validated['id_salle'])
+            ->whereIn('statut', ['en_attente', 'validee', 'confirmee'])
             ->where(function ($query) use ($validated) {
                 $query->whereBetween('date_debut', [$validated['date_debut'], $validated['date_fin']])
                     ->orWhereBetween('date_fin', [$validated['date_debut'], $validated['date_fin']])
@@ -44,77 +64,226 @@ class BookingController extends Controller
                             ->where('date_fin', '>=', $validated['date_fin']);
                     });
             })
-            ->whereNotIn('statut', ['annulee', 'terminee'])
             ->exists();
 
         if ($conflict) {
-            return response()->json(['message' => 'Cette salle est déjà réservée sur cette plage horaire'], 409);
+            return response()->json([
+                'message' => 'Cette salle est déjà réservée sur ce créneau.'
+            ], 409);
         }
 
         $reservation = Reservation::create([
             'id_salle' => $validated['id_salle'],
-            'id_client' => $user->id_utilisateur,
+            'id_client' => $idClient,
+            'id_receptionniste' => $isStaff ? $user->id_utilisateur : null,
             'date_debut' => $validated['date_debut'],
             'date_fin' => $validated['date_fin'],
             'motif' => $validated['motif'] ?? null,
             'statut' => 'en_attente',
             'date_creation' => now(),
         ]);
+        $reservation->load('salle');
 
-        $this->notifyReceptionists($reservation);
+        // ⚠ AJOUT : la réception est prévenue de chaque nouvelle demande —
+        // c'est ce qui rend la cloche « vivante » côté personnel.
+        $receptionnistes = Utilisateur::where('role', 'receptionniste')->pluck('id_utilisateur');
+        if ($receptionnistes->isNotEmpty()) {
+            $now = now();
+            Notification::insert($receptionnistes->map(fn ($idr) => [
+                'id_utilisateur' => $idr,
+                'titre' => 'Nouvelle demande de réservation',
+                'contenu' => 'Une demande vient d\'arriver pour la salle « '
+                    . ($reservation->salle->nom_salle ?? '#' . $reservation->id_salle)
+                    . ' » du ' . $reservation->date_debut->format('d/m/Y H\hi') . '. À valider.',
+                'type' => 'reservation',
+                'est_lu' => false,
+                'date_creation' => $now,
+            ])->all());
+        }
 
-        return response()->json($reservation, 201);
+        return response()->json($reservation->load('salle'), 201);
     }
+
+    // ==========================================
+    // COMMUN
+    // ==========================================
 
     public function show($id)
     {
-        return response()->json(
-            Reservation::with(['salle', 'client', 'paiement'])->findOrFail($id)
-        );
+        $reservation = Reservation::with(['salle', 'salle.tarifs', 'client', 'receptionniste', 'paiement'])
+            ->find($id);
+
+        if (!$reservation) {
+            return response()->json([
+                'message' => "Aucune réservation trouvée avec l'identifiant {$id}."
+            ], 404);
+        }
+
+        // ⚠ AJOUT sécurité : un client ne peut consulter que SES réservations.
+        $user = Auth::user();
+        if ($user->role === 'client' && $reservation->id_client !== $user->id_utilisateur) {
+            return response()->json(['message' => 'Accès non autorisé'], 403);
+        }
+
+        return response()->json($reservation);
     }
 
     public function update(Request $request, $id)
     {
-        $user = Auth::user();
-        $reservation = Reservation::where('id_reservation', $id)
-            ->where('id_client', $user->id_utilisateur)
-            ->firstOrFail();
+        $reservation = Reservation::find($id);
 
-        if ($reservation->statut !== 'en_attente') {
-            return response()->json(['message' => 'Cette réservation ne peut pas être modifiée'], 400);
+        if (!$reservation) {
+            return response()->json([
+                'message' => "Aucune réservation trouvée avec l'identifiant {$id}."
+            ], 404);
+        }
+
+        // ⚠ AJOUT sécurité : un client ne modifie que SES réservations,
+        // et uniquement tant qu'elles sont en attente.
+        $user = Auth::user();
+        if ($user->role === 'client') {
+            if ($reservation->id_client !== $user->id_utilisateur) {
+                return response()->json(['message' => 'Accès non autorisé'], 403);
+            }
+            if ($reservation->statut !== 'en_attente') {
+                return response()->json([
+                    'message' => 'Cette réservation a déjà été traitée et ne peut plus être modifiée.'
+                ], 400);
+            }
         }
 
         $validated = $request->validate([
-            'date_debut' => 'sometimes|date|after:now',
+            'id_salle' => 'sometimes|exists:salle,id_salle',
+            'date_debut' => 'sometimes|date',
             'date_fin' => 'sometimes|date|after:date_debut',
             'motif' => 'nullable|string|max:255',
+            // ⚠ 'terminee' retiré : ce statut n'est jamais stocké (calculé).
+            'statut' => ($user->role === 'client' ? 'prohibited' : 'sometimes') . '|in:en_attente,validee,confirmee,annulee',
         ]);
 
         $reservation->update($validated);
-        return response()->json($reservation);
+
+        return response()->json($reservation->load('salle'));
     }
 
     public function cancel($id)
     {
-        $user = Auth::user();
-        $reservation = Reservation::where('id_reservation', $id)
-            ->where('id_client', $user->id_utilisateur)
-            ->firstOrFail();
+        $reservation = Reservation::find($id);
 
-        if ($reservation->statut === 'terminee') {
-            return response()->json(['message' => 'Impossible d\'annuler une réservation terminée'], 400);
+        if (!$reservation) {
+            return response()->json([
+                'message' => "Aucune réservation trouvée avec l'identifiant {$id}."
+            ], 404);
+        }
+
+        // ⚠ AJOUT sécurité : un client n'annule que SES réservations.
+        $user = Auth::user();
+        if ($user->role === 'client' && $reservation->id_client !== $user->id_utilisateur) {
+            return response()->json(['message' => 'Accès non autorisé'], 403);
+        }
+
+        if ($reservation->statut === 'confirmee') {
+            return response()->json([
+                'message' => 'Cette réservation est déjà confirmée et payée. Contactez l\'administrateur pour l\'annuler.'
+            ], 400);
         }
 
         $reservation->statut = 'annulee';
         $reservation->save();
 
-        $this->notifyClient($reservation, 'Réservation annulée');
-
-        return response()->json(['message' => 'Réservation annulée']);
+        return response()->json(['message' => 'Réservation annulée avec succès']);
     }
 
-    // RECEPTIONIST
+    public function getNotifications()
+    {
+        $user = Auth::user();
+        return response()->json(
+            Notification::where('id_utilisateur', $user->id_utilisateur)
+                ->orderBy('date_creation', 'desc')
+                ->get()
+        );
+    }
+
+    public function markNotificationAsRead($id)
+    {
+        // ⚠ AJOUT sécurité : on ne marque que SES propres notifications.
+        $notification = Notification::where('id_utilisateur', Auth::id())->find($id);
+
+        if (!$notification) {
+            return response()->json(['message' => 'Notification introuvable'], 404);
+        }
+
+        $notification->est_lu = true;
+        $notification->save();
+
+        return response()->json($notification);
+    }
+
+    // ==========================================
+    // RÉCEPTIONNISTE
+    // ==========================================
+
     public function receptionistBookings(Request $request)
+    {
+        $query = Reservation::with(['client', 'salle'])
+            ->orderBy('date_creation', 'desc');
+
+        if ($request->has('statut')) {
+            $query->where('statut', $request->statut);
+        }
+
+        return response()->json($query->paginate(20));
+    }
+
+    public function validateBooking($id)
+    {
+        $reservation = Reservation::find($id);
+
+        if (!$reservation) {
+            return response()->json(['message' => "Réservation {$id} introuvable"], 404);
+        }
+
+        if ($reservation->statut !== 'en_attente') {
+            return response()->json([
+                'message' => "Cette réservation ne peut pas être validée (statut actuel : {$reservation->statut})"
+            ], 400);
+        }
+
+        $reservation->statut = 'validee';
+        $reservation->id_receptionniste = Auth::id();
+        $reservation->save();
+
+        Notification::create([
+            'id_utilisateur' => $reservation->id_client,
+            'titre' => 'Réservation validée',
+            'contenu' => 'Votre réservation a été validée par la réception. Vous pouvez procéder au paiement.',
+            'type' => 'validation',
+            'est_lu' => false,
+            'date_creation' => now(),
+        ]);
+
+        return response()->json($reservation->load('salle'));
+    }
+
+    public function confirm($id)
+    {
+        $reservation = Reservation::find($id);
+
+        if (!$reservation) {
+            return response()->json(['message' => "Réservation {$id} introuvable"], 404);
+        }
+
+        $reservation->statut = 'confirmee';
+        $reservation->save();
+
+        return response()->json($reservation);
+    }
+
+    // ==========================================
+    // CAISSIER
+    // ==========================================
+
+    public function cashierBookings(Request $request)
     {
         $query = Reservation::with(['client', 'salle', 'paiement'])
             ->orderBy('date_creation', 'desc');
@@ -123,38 +292,16 @@ class BookingController extends Controller
             $query->where('statut', $request->statut);
         }
 
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->whereHas('client', function ($q) use ($search) {
-                $q->where('nom', 'LIKE', "%{$search}%")
-                    ->orWhere('prenom', 'LIKE', "%{$search}%");
-            });
-        }
-
         return response()->json($query->paginate(20));
     }
 
-    public function validateBooking($id)
-    {
-        $reservation = Reservation::findOrFail($id);
-
-        if ($reservation->statut !== 'en_attente') {
-            return response()->json(['message' => 'Cette réservation ne peut pas être validée'], 400);
-        }
-
-        $reservation->statut = 'validee';
-        $reservation->id_receptionniste = Auth::id();
-        $reservation->save();
-
-        $this->notifyClient($reservation, 'Réservation validée');
-
-        return response()->json(['message' => 'Réservation validée']);
-    }
-
+    // ==========================================
     // ADMIN
+    // ==========================================
+
     public function adminIndex(Request $request)
     {
-        $query = Reservation::with(['client', 'salle', 'paiement'])
+        $query = Reservation::with(['client', 'salle', 'receptionniste', 'paiement'])
             ->orderBy('date_creation', 'desc');
 
         if ($request->has('statut')) {
@@ -174,63 +321,24 @@ class BookingController extends Controller
 
     public function adminCancel($id)
     {
-        $reservation = Reservation::findOrFail($id);
+        $reservation = Reservation::find($id);
+
+        if (!$reservation) {
+            return response()->json(['message' => "Réservation {$id} introuvable"], 404);
+        }
+
         $reservation->statut = 'annulee';
         $reservation->save();
 
-        $this->notifyClient($reservation, 'Réservation annulée par l\'administrateur');
-
-        return response()->json(['message' => 'Réservation annulée']);
-    }
-
-    // NOTIFICATIONS
-    public function getNotifications()
-    {
-        $user = Auth::user();
-        return response()->json(
-            Notification::where('id_utilisateur', $user->id_utilisateur)
-                ->orderBy('date_creation', 'desc')
-                ->get()
-        );
-    }
-
-    public function markNotificationAsRead($id)
-    {
-        $notification = Notification::where('id_notification', $id)
-            ->where('id_utilisateur', Auth::id())
-            ->firstOrFail();
-
-        $notification->est_lu = true;
-        $notification->save();
-
-        return response()->json(['message' => 'Notification marquée comme lue']);
-    }
-
-    // PRIVATE
-    private function notifyReceptionists($reservation)
-    {
-        $receptionists = Utilisateur::where('role', 'receptionniste')->get();
-        foreach ($receptionists as $receptionist) {
-            Notification::create([
-                'id_utilisateur' => $receptionist->id_utilisateur,
-                'titre' => 'Nouvelle réservation en attente',
-                'contenu' => 'Réservation #' . $reservation->id_reservation . ' par ' . ($reservation->client->prenom ?? '') . ' ' . ($reservation->client->nom ?? ''),
-                'type' => 'nouvelle_reservation',
-                'est_lu' => false,
-                'date_creation' => now(),
-            ]);
-        }
-    }
-
-    private function notifyClient($reservation, $message)
-    {
         Notification::create([
             'id_utilisateur' => $reservation->id_client,
-            'titre' => $message,
-            'contenu' => 'Votre réservation du ' . $reservation->date_debut->format('d/m/Y à H:i') . ' a été ' . strtolower($message),
-            'type' => 'confirmation',
+            'titre' => 'Réservation annulée',
+            'contenu' => 'Votre réservation a été annulée par l\'administration.',
+            'type' => 'annulation',
             'est_lu' => false,
             'date_creation' => now(),
         ]);
+
+        return response()->json(['message' => 'Réservation annulée par l\'administrateur']);
     }
 }

@@ -1,32 +1,29 @@
-// frontend/src/api/authApi.js
-import axios from 'axios';
+import api from "./client";
+import { ENDPOINTS } from "./endpoints";
 
-const API_URL = 'http://127.0.0.1:8000/api';
-
-export const register = async (userData) => {
-    const response = await axios.post(`${API_URL}/register`, userData);
-    return response.data;
+/**
+ * Le rôle n'est JAMAIS envoyé à l'inscription : il est forcé à `client`
+ * côté serveur (faille corrigée — CLAUDE.md §5).
+ * `categorie_client` est obligatoire (grille tarifaire).
+ */
+export const register = (payload) => {
+  const { nom, prenom, email, telephone, password, password_confirmation, categorie_client } = payload;
+  return api.post(ENDPOINTS.auth.register, {
+    nom, prenom, email, telephone, password, password_confirmation, categorie_client,
+  });
 };
 
-export const login = async (credentials) => {
-    const response = await axios.post(`${API_URL}/login`, credentials);
-    return response.data;
-};
-
-export const logout = async () => {
-    const token = localStorage.getItem('token');
-    if (token) {
-        await axios.post(`${API_URL}/logout`, {}, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-    }
-};
-
-export const getMe = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) throw new Error('No token');
-    const response = await axios.get(`${API_URL}/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-};
+export const login = (credentials) => api.post(ENDPOINTS.auth.login, credentials);
+export const logout = () => api.post(ENDPOINTS.auth.logout);
+export const fetchMe = () => api.get(ENDPOINTS.auth.me);
+export const updateProfile = (payload) => api.put(ENDPOINTS.profile.update, payload);
+/**
+ * AuthController::changePassword attend oldPassword / newPassword /
+ * newPassword_confirmation — on mappe ici depuis les noms du formulaire.
+ */
+export const updatePassword = ({ current_password, password, password_confirmation }) =>
+  api.put(ENDPOINTS.profile.password, {
+    oldPassword: current_password,
+    newPassword: password,
+    newPassword_confirmation: password_confirmation,
+  });

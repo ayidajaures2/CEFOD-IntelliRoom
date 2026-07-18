@@ -1,19 +1,22 @@
-﻿// frontend/src/components/common/PrivateRoute.jsx
-import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth'; // ← Utilise useAuth depuis hooks
+import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
+import { homePathForRole } from "../../utils/roleHelpers";
+import Loader from "./Loader";
 
-const PrivateRoute = () => {
-  const { user, loading } = useAuth();
+/**
+ * Garde de route : exige une session, et un rôle autorisé si `roles` est fourni.
+ * Un utilisateur connecté au mauvais endroit est renvoyé vers SON tableau de bord.
+ */
+export default function PrivateRoute({ roles }) {
+  const { isAuthenticated, role, initializing } = useAuth();
+  const location = useLocation();
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent"></div>
-      </div>
-    );
+  if (initializing) return <Loader full label="Vérification de la session…" />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-
-  return user ? <Outlet /> : <Navigate to="/login" replace />;
-};
-
-export default PrivateRoute;
+  if (roles && !roles.includes(role)) {
+    return <Navigate to={homePathForRole(role)} replace />;
+  }
+  return <Outlet />;
+}

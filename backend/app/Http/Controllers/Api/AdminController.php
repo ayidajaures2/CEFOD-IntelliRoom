@@ -8,135 +8,221 @@ use App\Models\Salle;
 use App\Models\Reservation;
 use App\Models\Paiement;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 
 class AdminController extends Controller
 {
+    // ==========================================
+    // DASHBOARD & STATISTIQUES
+    // ==========================================
+
     public function dashboard()
     {
         return response()->json([
-            'stats' => $this->getStats(),
-            'recentBookings' => $this->getRecentBookings(),
-            'recentUsers' => $this->getRecentUsers(),
+            'stats' => $this->buildStats(),
+            'recentBookings' => $this->recentBookings(5),
+            'recentUsers' => $this->recentUsers(5),
         ]);
     }
 
     public function getStats()
     {
-        $totalRooms = Salle::count();
-        $occupiedRooms = Salle::where('statut', 'occupee')->count();
-        $occupancyRate = $totalRooms > 0 ? round(($occupiedRooms / $totalRooms) * 100) : 0;
+        return response()->json($this->buildStats());
+    }
 
-        return response()->json([
+    private function buildStats()
+    {
+        return [
             'totalUsers' => Utilisateur::count(),
-            'totalRooms' => $totalRooms,
+            'totalRooms' => Salle::count(),
             'totalBookings' => Reservation::count(),
             'pendingBookings' => Reservation::where('statut', 'en_attente')->count(),
-            'completedBookings' => Reservation::where('statut', 'terminee')->count(),
+            // ⚠ CORRIGÉ : 'terminee' n'est JAMAIS stocké en base (statut
+            // calculé par l'accessor statut_effectif) — l'ancien filtre
+            // renvoyait toujours 0. "Terminée" = confirmée + fin passée.
+            'completedBookings' => Reservation::where('statut', 'confirmee')
+                ->where('date_fin', '<', now())->count(),
             'cancelledBookings' => Reservation::where('statut', 'annulee')->count(),
             'totalRevenue' => Paiement::where('statut', 'valide')->sum('montant') ?? 0,
-            'occupancyRate' => $occupancyRate,
+            'occupancyRate' => $this->computeOccupancyRate(),
+        ];
+    }
+
+    private function computeOccupancyRate()
+    {
+        $salles = Salle::all();
+        $total = $salles->count();
+        if ($total === 0) {
+            return 0;
+        }
+        // ⚠ CORRIGÉ : se base sur statut_effectif (calculé), pas sur la
+        // colonne brute qui n'est jamais mise à jour automatiquement.
+        $occupied = $salles->filter(fn ($s) => $s->statut_effectif !== 'libre')->count();
+        return round(($occupied / $total) * 100, 1);
+    }
+
+    /**
+     * Endpoint combiné — tout le dashboard admin en UN SEUL appel réseau.
+     */
+    public function dashboardFull()
+    {
+        return response()->json([
+            'stats' => $this->buildStats(),
+            'recentBookings' => $this->recentBookings(10),
+            'recentUsers' => $this->recentUsers(10),
+            'chartData' => $this->chartDataArray(),
+            'occupancyData' => $this->occupancyDataArray(),
+            'revenueData' => $this->revenueDataArray(),
         ]);
     }
 
-    public function getChartData()
+    public function getChartData(Request $request)
     {
-        $data = [];
-        for ($i = 5; $i >= 0; $i--) {
-            $month = now()->subMonths($i);
-            $data[] = [
-                'mois' => $month->format('M'),
-                'reservations' => Reservation::whereYear('date_creation', $month->year)
-                    ->whereMonth('date_creation', $month->month)->count(),
-                'revenus' => Paiement::whereYear('date_paiement', $month->year)
-                    ->whereMonth('date_paiement', $month->month)
-                    ->where('statut', 'valide')->sum('montant') ?? 0,
+        return response()->json($this->chartDataArray());
+    }
+
+    private function chartDataArray()
+    {
+        $data = Reservation::selectRaw("DATE_FORMAT(date_creation, '%Y-%m') as mois_cle, COUNT(*) as total")
+            ->where('date_creation', '>=', now()->subMonths(6)->startOfMonth())
+            ->groupBy('mois_cle')
+            ->orderBy('mois_cle')
+            ->get();
+
+        $moisFr = [
+            '01' => 'Jan', '02' => 'Fév', '03' => 'Mar', '04' => 'Avr',
+            '05' => 'Mai', '06' => 'Jun', '07' => 'Jul', '08' => 'Aoû',
+            '09' => 'Sep', '10' => 'Oct', '11' => 'Nov', '12' => 'Déc',
+        ];
+
+        return $data->map(function ($row) use ($moisFr) {
+            [$annee, $mois] = explode('-', $row->mois_cle);
+            return [
+                'mois' => $moisFr[$mois] . ' ' . substr($annee, 2),
+                'reservations' => (int) $row->total,
             ];
-        }
-        return response()->json($data);
+        })->values();
     }
 
     public function getOccupancyData()
     {
-        return response()->json([
-            ['name' => 'Libres', 'value' => Salle::where('statut', 'libre')->count()],
-            ['name' => 'Réservées', 'value' => Salle::where('statut', 'reservee')->count()],
-            ['name' => 'Occupées', 'value' => Salle::where('statut', 'occupee')->count()],
-        ]);
+        return response()->json($this->occupancyDataArray());
+    }
+
+    private function occupancyDataArray()
+    {
+        $salles = Salle::with('reservations')->get();
+
+        $counts = ['libre' => 0, 'reservee' => 0, 'occupee' => 0];
+
+        foreach ($salles as $salle) {
+            $statut = $salle->statut_effectif;
+            $counts[$statut] = ($counts[$statut] ?? 0) + 1;
+        }
+
+        return [
+            ['name' => 'Libre', 'value' => $counts['libre']],
+            ['name' => 'Réservée', 'value' => $counts['reservee']],
+            ['name' => 'Occupée', 'value' => $counts['occupee']],
+        ];
     }
 
     public function getRevenueData()
     {
-        $data = DB::table('salle')
-            ->join('reservation', 'salle.id_salle', '=', 'reservation.id_salle')
-            ->join('paiement', 'reservation.id_reservation', '=', 'paiement.id_reservation')
-            ->where('paiement.statut', 'valide')
-            ->select('salle.nom_salle as salle', DB::raw('SUM(paiement.montant) as revenus'))
-            ->groupBy('salle.id_salle', 'salle.nom_salle')
-            ->get();
+        return response()->json($this->revenueDataArray());
+    }
 
-        return response()->json($data);
+    private function revenueDataArray()
+    {
+        return Paiement::where('paiement.statut', 'valide')
+            ->join('reservation', 'paiement.id_reservation', '=', 'reservation.id_reservation')
+            ->join('salle', 'reservation.id_salle', '=', 'salle.id_salle')
+            ->selectRaw('salle.nom_salle as salle, SUM(paiement.montant) as revenus')
+            ->groupBy('salle.nom_salle')
+            ->orderByDesc('revenus')
+            ->get();
     }
 
     public function getRecentBookings()
     {
-        $bookings = Reservation::with(['client', 'salle'])
+        return response()->json($this->recentBookings(10));
+    }
+
+    private function recentBookings($limit)
+    {
+        return Reservation::with(['client', 'salle', 'paiement'])
             ->orderBy('date_creation', 'desc')
-            ->limit(10)
+            ->limit($limit)
             ->get()
             ->map(function ($b) {
                 return [
                     'id' => $b->id_reservation,
-                    'client' => ($b->client->prenom ?? '') . ' ' . ($b->client->nom ?? ''),
+                    'client' => trim(($b->client->nom ?? '') . ' ' . ($b->client->prenom ?? '')),
                     'salle' => $b->salle->nom_salle ?? 'N/A',
-                    'date' => $b->date_debut->format('Y-m-d'),
-                    'heure' => $b->date_debut->format('H:i'),
-                    'statut' => $b->statut,
-                    'montant' => $b->paiement?->montant,
+                    'date' => optional($b->date_debut)->format('d/m/Y'),
+                    'heure' => optional($b->date_debut)->format('H:i'),
+                    'montant' => optional($b->paiement)->montant ?? 0,
+                    'statut' => $b->statut_effectif,
                 ];
             });
-
-        return response()->json($bookings);
     }
 
     public function getRecentUsers()
     {
-        $users = Utilisateur::orderBy('date_creation', 'desc')
-            ->limit(10)
-            ->get()
+        return response()->json($this->recentUsers(10));
+    }
+
+    private function recentUsers($limit)
+    {
+        return Utilisateur::orderBy('date_creation', 'desc')
+            ->limit($limit)
+            ->get(['id_utilisateur', 'nom', 'prenom', 'email', 'role', 'date_creation'])
             ->map(function ($u) {
                 return [
                     'id' => $u->id_utilisateur,
+                    'id_utilisateur' => $u->id_utilisateur,
                     'nom' => $u->nom,
                     'prenom' => $u->prenom,
                     'email' => $u->email,
                     'role' => $u->role,
-                    'date' => $u->date_creation->format('Y-m-d'),
+                    'date' => optional($u->date_creation)->format('d/m/Y'),
+                    'date_creation' => $u->date_creation,
                 ];
             });
-
-        return response()->json($users);
     }
+
+    // ==========================================
+    // GESTION DES UTILISATEURS
+    // ==========================================
 
     public function getUsers(Request $request)
     {
-        $query = Utilisateur::orderBy('date_creation', 'desc');
+        $query = Utilisateur::query();
+
+        if ($request->has('role')) {
+            $query->where('role', $request->role);
+        }
 
         if ($request->has('search')) {
             $search = $request->search;
-            $query->where('nom', 'LIKE', "%{$search}%")
-                ->orWhere('prenom', 'LIKE', "%{$search}%")
-                ->orWhere('email', 'LIKE', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('nom', 'LIKE', "%{$search}%")
+                    ->orWhere('prenom', 'LIKE', "%{$search}%")
+                    ->orWhere('email', 'LIKE', "%{$search}%");
+            });
         }
 
-        return response()->json($query->paginate(15));
+        return response()->json(
+            $query->orderBy('date_creation', 'desc')->paginate(20)
+        );
     }
 
     public function getUser($id)
     {
-        return response()->json(Utilisateur::findOrFail($id));
+        $user = Utilisateur::findOrFail($id);
+        return response()->json($user);
     }
 
     public function storeUser(Request $request)
@@ -148,17 +234,18 @@ class AdminController extends Controller
             'telephone' => 'nullable|string|max:20',
             'password' => 'required|string|min:6',
             'role' => 'required|in:admin,receptionniste,caissier,client',
+            // ⚠ CORRIGÉ : sans cette règle, la catégorie envoyée par le
+            // frontend était silencieusement IGNORÉE (absente de $validated)
+            // → un client créé par l'admin n'avait pas de catégorie
+            // tarifaire, et calculatePrice() retombait sur le tarif par
+            // défaut. Obligatoire pour un client, interdite pour le staff.
+            'categorie_client' => 'required_if:role,client|prohibited_unless:role,client|nullable|in:org_internationale,admin_ong,association_base',
         ]);
 
-        $user = Utilisateur::create([
-            'nom' => $validated['nom'],
-            'prenom' => $validated['prenom'],
-            'email' => $validated['email'],
-            'telephone' => $validated['telephone'] ?? null,
-            'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
-            'date_creation' => now(),
-        ]);
+        $validated['password'] = Hash::make($validated['password']);
+        $validated['date_creation'] = now();
+
+        $user = Utilisateur::create($validated);
 
         return response()->json($user, 201);
     }
@@ -173,32 +260,94 @@ class AdminController extends Controller
             'email' => 'sometimes|email|unique:utilisateur,email,' . $id . ',id_utilisateur',
             'telephone' => 'nullable|string|max:20',
             'role' => 'sometimes|in:admin,receptionniste,caissier,client',
+            // Seul l'admin peut corriger la catégorie tarifaire d'un client.
+            'categorie_client' => 'sometimes|nullable|in:org_internationale,admin_ong,association_base',
         ]);
 
+        // ⚠ AJOUT : si un nouveau mot de passe est fourni, on le hache ;
+        // sinon on n'y touche pas (le frontend n'envoie password que s'il
+        // est renseigné).
         if ($request->filled('password')) {
+            $request->validate(['password' => 'string|min:6']);
             $validated['password'] = Hash::make($request->password);
         }
 
         $user->update($validated);
+
         return response()->json($user);
     }
 
     public function updateUserRole(Request $request, $id)
     {
         $user = Utilisateur::findOrFail($id);
-        $user->role = $request->validate(['role' => 'required|in:admin,receptionniste,caissier,client'])['role'];
+
+        $validated = $request->validate([
+            'role' => 'required|in:admin,receptionniste,caissier,client',
+        ]);
+
+        $user->role = $validated['role'];
         $user->save();
 
-        return response()->json(['message' => 'Rôle mis à jour']);
+        return response()->json($user);
     }
 
+    /**
+     * ADMIN - Supprimer un utilisateur (blocage propre si historique lié)
+     */
     public function deleteUser($id)
     {
-        if ((int)$id === Auth::id()) {
-            return response()->json(['message' => 'Vous ne pouvez pas vous supprimer vous-même'], 403);
+        $user = Utilisateur::findOrFail($id);
+
+        if ($user->id_utilisateur === Auth::user()->id_utilisateur) {
+            return response()->json([
+                'message' => 'Vous ne pouvez pas supprimer votre propre compte.'
+            ], 400);
         }
 
-        Utilisateur::findOrFail($id)->delete();
-        return response()->json(['message' => 'Utilisateur supprimé']);
+        $hasReservationsAsClient = Reservation::where('id_client', $user->id_utilisateur)->exists();
+        $hasReservationsAsReceptionniste = Reservation::where('id_receptionniste', $user->id_utilisateur)->exists();
+        $hasPaiementsAsCaissier = Paiement::where('id_caissier', $user->id_utilisateur)->exists();
+
+        if ($hasReservationsAsClient || $hasReservationsAsReceptionniste || $hasPaiementsAsCaissier) {
+            return response()->json([
+                'message' => 'Impossible de supprimer cet utilisateur : il a des réservations ou paiements associés. '
+                    . 'Pensez à désactiver le compte plutôt qu\'à le supprimer si l\'historique doit être conservé.'
+            ], 409);
+        }
+
+        try {
+            $user->delete();
+            return response()->json(['message' => 'Utilisateur supprimé avec succès']);
+        } catch (\Exception $e) {
+            Log::error('Erreur suppression utilisateur', ['id_utilisateur' => $id, 'error' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Erreur lors de la suppression de l\'utilisateur',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // ==========================================
+    // CONFIGURATION
+    // ==========================================
+
+    public function getSettings()
+    {
+        // Placeholder simple : à remplacer par une vraie table `settings`
+        // si tu veux le rendre persistant.
+        return response()->json([
+            'app_name' => 'CEFOD IntelliRoom',
+            'contact_email' => 'contact@cefod.org',
+            'polling_interval_seconds' => 5,
+        ]);
+    }
+
+    public function updateSettings(Request $request)
+    {
+        // TODO: persister réellement ces paramètres (table settings, cache, etc.)
+        return response()->json([
+            'message' => 'Paramètres mis à jour (persistance à implémenter)',
+            'settings' => $request->all(),
+        ]);
     }
 }

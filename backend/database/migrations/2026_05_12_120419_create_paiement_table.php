@@ -13,6 +13,8 @@ return new class extends Migration
             $table->foreignId('id_reservation')->unique()->constrained('Reservation', 'id_reservation');
             $table->foreignId('id_caissier')->nullable()->constrained('Utilisateur', 'id_utilisateur');
             $table->decimal('montant', 10, 2);
+            $table->decimal('frais', 10, 2)->default(0.00)->after('montant');
+            $table->decimal('total', 10, 2)->virtualAs('montant + frais')->after('frais');
             $table->enum('mode_paiement', ['especes', 'mobile_money']);
             $table->timestamp('date_paiement')->useCurrent();
             $table->enum('statut', ['en_attente', 'valide', 'annule'])->default('en_attente');
