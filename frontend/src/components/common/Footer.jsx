@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-ink/10 bg-paper">
+    <footer className="border-t border-ink/10 bg-surface">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-sm">
           <p className="font-display text-lg font-bold">CEFOD <span className="text-accent">IntelliRoom</span></p>

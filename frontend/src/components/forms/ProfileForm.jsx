@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useNotify } from "../../contexts/NotificationContext";
 import { updateProfile, updatePassword } from "../../api/authApi";
+import { uploadAvatar, deleteAvatar } from "../../api/mediaApi";
+import ImageUploader from "../common/ImageUploader";
 import { CATEGORIE_CLIENT_LABELS, ROLE_LABELS } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
 
@@ -52,8 +54,40 @@ export default function ProfileForm() {
     }
   };
 
+  const changeAvatar = async (file) => {
+    try {
+      await uploadAvatar(file);
+      await refreshUser();
+      success("Photo de profil mise à jour.");
+    } catch (e) {
+      toastError(apiErrorMessage(e, "Envoi de la photo impossible."));
+    }
+  };
+
+  const removeAvatar = async () => {
+    try {
+      await deleteAvatar();
+      await refreshUser();
+      success("Photo de profil retirée.");
+    } catch (e) {
+      toastError(apiErrorMessage(e, "Suppression impossible."));
+    }
+  };
+
   return (
     <div className="grid gap-6 lg:grid-cols-2">
+      <section className="card space-y-4 p-6 lg:col-span-2">
+        <h2 className="font-display text-lg font-bold">Photo de profil</h2>
+        <ImageUploader
+          shape="circle"
+          label="Votre avatar"
+          hint="JPG, PNG ou WebP — 2 Mo max"
+          currentUrl={user?.photo_url}
+          onUpload={changeAvatar}
+          onDelete={user?.photo_url ? removeAvatar : undefined}
+        />
+      </section>
+
       <section className="card space-y-4 p-6">
         <h2 className="font-display text-lg font-bold">Informations personnelles</h2>
         <div className="grid gap-4 sm:grid-cols-2">

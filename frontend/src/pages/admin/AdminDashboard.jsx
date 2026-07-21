@@ -7,12 +7,24 @@ import Loader from "../../components/common/Loader";
 import StatutBadge from "../../components/common/StatutBadge";
 import { formatDateTime } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
+import { fetchAdminChart, fetchAdminOccupancy, fetchAdminRevenue } from "../../api/chartApi";
+import { BarsChart, DonutChart, ChartCard } from "../../components/common/Charts";
+import StatCard from "../../components/common/StatCard";
+import { LuCalendarDays, LuHourglass, LuChartBar, LuBanknote } from "react-icons/lu";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [chart, setChart] = useState([]);
+  const [occ, setOcc] = useState([]);
+  const [rev, setRev] = useState([]);
+  useEffect(() => {
+    fetchAdminChart().then(({ data }) => setChart(Array.isArray(data) ? data : data.data ?? [])).catch(() => {});
+    fetchAdminOccupancy().then(({ data }) => setOcc(Array.isArray(data) ? data : data.data ?? [])).catch(() => {});
+    fetchAdminRevenue().then(({ data }) => setRev(Array.isArray(data) ? data : data.data ?? [])).catch(() => {});
+  }, []);
   useEffect(() => {
     Promise.allSettled([fetchStats(), fetchAllBookings()])
       .then(([s, b]) => {
@@ -26,10 +38,10 @@ export default function AdminDashboard() {
   }, []);
 
   const cards = [
-    ["Réservations totales", stats?.total_reservations ?? recent.length, null],
-    ["En attente", stats?.reservations_en_attente ?? recent.filter((b) => b.statut === "en_attente").length, "/reception/reservations"],
-    ["Taux d'occupation", stats?.taux_occupation != null ? `${stats.taux_occupation}%` : "—", "/admin/rapports"],
-    ["Revenus encaissés", stats?.revenus != null ? formatMoney(stats.revenus) : "—", "/admin/rapports"],
+    { label: "Réservations totales", value: stats?.total_reservations ?? recent.length, icon: LuCalendarDays },
+    { label: "En attente", value: stats?.reservations_en_attente ?? recent.filter((b) => b.statut === "en_attente").length, icon: LuHourglass, accent: true },
+    { label: "Taux d'occupation", value: stats?.taux_occupation != null ? `${stats.taux_occupation}%` : "—", icon: LuChartBar },
+    { label: "Revenus encaissés", value: stats?.revenus != null ? formatMoney(stats.revenus) : "—", icon: LuBanknote },
   ];
 
   return (
@@ -43,12 +55,23 @@ export default function AdminDashboard() {
       {loading ? <Loader /> : (
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {cards.map(([label, value]) => (
-              <div key={label} className="card p-5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">{label}</p>
-                <p className="mt-1 font-display text-2xl font-black text-accent-dark">{value}</p>
-              </div>
+            {cards.map((c) => (
+              <StatCard key={c.label} label={c.label} value={c.value} icon={c.icon} accent={c.accent} />
             ))}
+          </div>
+
+          <div className="mb-6 grid gap-6 xl:grid-cols-2">
+            <ChartCard title="Réservations par mois">
+              <BarsChart data={chart} dataKey="reservations" xKey="mois" name="Réservations" />
+            </ChartCard>
+            <ChartCard title="Occupation des salles">
+              <DonutChart data={occ} />
+            </ChartCard>
+            <div className="xl:col-span-2">
+              <ChartCard title="Revenus par salle">
+                <BarsChart data={rev} dataKey="revenus" xKey="salle" name="Revenus (FCFA)" color="#0d0d0d" />
+              </ChartCard>
+            </div>
           </div>
 
           <section className="card p-5">

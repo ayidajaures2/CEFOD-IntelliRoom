@@ -5,6 +5,9 @@ import { usePolling } from "../hooks/usePolling";
 import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from "../api/notificationApi";
 import { ROLES, ROLE_LABELS } from "../utils/constants";
 import { formatDateTime } from "../utils/formatDate";
+import Avatar from "../components/common/Avatar";
+import { LuMenu, LuBell, LuLogOut } from "react-icons/lu";
+import ThemeToggle from "../components/common/ThemeToggle";
 
 const NAV_BY_ROLE = {
   [ROLES.CLIENT]: [
@@ -20,10 +23,12 @@ const NAV_BY_ROLE = {
     { to: "/reception/reservations", label: "Réservations" },
     { to: "/reception/conversations", label: "Messagerie clients" },
     { to: "/reception/factures", label: "Factures" },
+    { to: "/reception/profil", label: "Mon profil" },
   ],
   [ROLES.CAISSIER]: [
     { to: "/caisse", label: "Tableau de bord", end: true },
     { to: "/caisse/paiements", label: "Paiements" },
+    { to: "/caisse/profil", label: "Mon profil" },
   ],
   [ROLES.ADMIN]: [
     { to: "/admin", label: "Tableau de bord", end: true },
@@ -31,6 +36,7 @@ const NAV_BY_ROLE = {
     { to: "/admin/utilisateurs", label: "Utilisateurs" },
     { to: "/admin/rapports", label: "Rapports" },
     { to: "/admin/parametres", label: "Paramètres" },
+    { to: "/admin/profil", label: "Mon profil" },
   ],
 };
 
@@ -104,10 +110,15 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="mt-4 border-t border-paper/10 pt-4">
-          <p className="truncate px-1 text-sm font-semibold">{user?.prenom} {user?.nom}</p>
-          <p className="px-1 text-xs text-accent">{ROLE_LABELS[role]}</p>
-          <button onClick={handleLogout} className="btn mt-3 w-full justify-start px-3 py-2 text-paper/65 hover:bg-paper/10 hover:text-paper">
-            ← Se déconnecter
+          <div className="flex items-center gap-3 px-1">
+            <Avatar user={user} size={40} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{user?.prenom} {user?.nom}</p>
+              <p className="text-xs text-accent">{ROLE_LABELS[role]}</p>
+            </div>
+          </div>
+          <button onClick={handleLogout} className="btn mt-3 flex w-full items-center gap-2 px-3 py-2 text-paper/65 hover:bg-paper/10 hover:text-paper">
+            <LuLogOut className="h-4 w-4" /> Se déconnecter
           </button>
         </div>
       </aside>
@@ -117,10 +128,12 @@ export default function DashboardLayout() {
 
       {/* Contenu */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-ink/10 bg-paper px-4 lg:px-8">
-          <button className="btn-ghost px-2 lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu">☰</button>
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-ink/10 bg-surface px-4 lg:px-8">
+          <button className="btn-ghost px-2 lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu"><LuMenu className="h-5 w-5" /></button>
           <Link to="/salles" className="hidden text-sm text-ink/55 hover:text-accent sm:block">← Retour au site public</Link>
 
+          <div className="flex items-center gap-2">
+          <ThemeToggle />
           <div className="relative">
             <button
               className="btn-ghost relative px-3"
@@ -128,7 +141,7 @@ export default function DashboardLayout() {
               aria-expanded={notifOpen}
               aria-label={`Notifications (${unread} non lues)`}
             >
-              🔔
+              <LuBell className="h-5 w-5" />
               {unread > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-paper">
                   {unread}
@@ -136,7 +149,7 @@ export default function DashboardLayout() {
               )}
             </button>
             {notifOpen && (
-              <div className="absolute right-0 mt-2 w-80 overflow-hidden rounded-xl border border-ink/10 bg-paper shadow-xl">
+              <div className="absolute right-0 mt-2 w-80 overflow-hidden rounded-xl border border-ink/10 bg-surface shadow-xl">
                 <div className="flex items-center justify-between border-b border-ink/5 px-4 py-2.5">
                   <p className="text-sm font-semibold">Notifications</p>
                   {unread > 0 && (
@@ -167,6 +180,7 @@ export default function DashboardLayout() {
                 </ul>
               </div>
             )}
+          </div>
           </div>
         </header>
 

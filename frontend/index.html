@@ -11,6 +11,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <script>
+      // Anti-flash : applique le thème enregistré (ou la préférence système)
+      // AVANT le premier rendu, pour éviter un flash clair en mode sombre.
+      (function () {
+        try {
+          var t = localStorage.getItem("cefod_theme");
+          if (t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

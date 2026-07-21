@@ -21,7 +21,8 @@ class Utilisateur extends Authenticatable
         'telephone',
         'password',
         'role',
-        'categorie_client', // AJOUTÉ — org_internationale / admin_ong / association_base (clients uniquement)
+        'categorie_client', // org_internationale / admin_ong / association_base (clients uniquement)
+        'photo',            // ✅ AJOUT — chemin de la photo de profil (avatar)
         'date_creation'
     ];
 
@@ -33,6 +34,9 @@ class Utilisateur extends Authenticatable
     protected $casts = [
         'date_creation' => 'datetime',
     ];
+
+    // ✅ AJOUT — expose photo_url (URL complète de l'avatar) dans le JSON
+    protected $appends = ['photo_url'];
 
     public function reservations()
     {
@@ -57,5 +61,14 @@ class Utilisateur extends Authenticatable
     public function conversations()
     {
         return $this->hasMany(Conversation::class, 'id_utilisateur');
+    }
+
+    /**
+     * ✅ AJOUT — URL complète de l'avatar (ou null).
+     * Nécessite `php artisan storage:link`.
+     */
+    public function getPhotoUrlAttribute()
+    {
+        return $this->photo ? asset('storage/' . $this->photo) : null;
     }
 }

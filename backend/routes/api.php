@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\CashierController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\ProfilePhotoController;
+use App\Http\Controllers\Api\RoomPhotoController;
 use Illuminate\Support\Facades\Route;
 
 // ============================================
@@ -21,9 +23,7 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // Catalogue public
-// ⚠ CORRIGÉ : la route fixe /rooms/occupation DOIT être déclarée AVANT
-// la route paramétrée /rooms/{id}, sinon Laravel capte "occupation"
-// comme un {id} et l'affichage temps réel tombe en erreur.
+// ⚠ /rooms/occupation DOIT être déclarée AVANT /rooms/{id}
 Route::get('/rooms', [RoomController::class, 'index']);
 Route::get('/rooms/occupation', [RoomController::class, 'getOccupation']);
 Route::get('/rooms/{id}', [RoomController::class, 'show']);
@@ -38,66 +38,67 @@ Route::post('/chatbot/ask', [ChatbotController::class, 'ask']);
 // ============================================
 Route::middleware('auth:sanctum')->group(function () {
 
-    // ============================================
-    // AUTH & PROFIL (tous les utilisateurs)
-    // ============================================
+    // ---- AUTH & PROFIL (tous les rôles) ----
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
-
-    // ⚠ AJOUT : notifications accessibles à TOUS les rôles connectés
-    // (avant, seuls client et admin avaient des routes → cloche
-    // définitivement vide pour la réception et la caisse).
-    Route::get('/notifications', [BookingController::class, 'getNotifications']);
-    Route::put('/notifications/{id}/read', [BookingController::class, 'markNotificationAsRead']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::put('/profile/password', [AuthController::class, 'changePassword']);
     Route::delete('/profile', [AuthController::class, 'deleteAccount']);
 
+    // Photo de profil (avatar) — self-service, tous rôles
+    Route::post('/profile/photo', [ProfilePhotoController::class, 'update']);
+    Route::delete('/profile/photo', [ProfilePhotoController::class, 'destroy']);
+
+    // Notifications — communes à TOUS les rôles connectés
+    Route::get('/notifications', [BookingController::class, 'getNotifications']);
+    Route::put('/notifications/{id}/read', [BookingController::class, 'markNotificationAsRead']);
+
 
     // ============================================
-    // CLIENT (rôle: client)
+    // CLIENT
     // ============================================
     Route::middleware('role:client')->prefix('client')->group(function () {
         Route::get('/dashboard', [ClientController::class, 'dashboard']);
         Route::get('/stats', [ClientController::class, 'getStats']);
 
-        // Mes réservations
+        // Réservations
         Route::get('/bookings', [BookingController::class, 'clientBookings']);
         Route::post('/bookings', [BookingController::class, 'store']);
         Route::get('/bookings/{id}', [BookingController::class, 'show']);
         Route::put('/bookings/{id}', [BookingController::class, 'update']);
         Route::delete('/bookings/{id}', [BookingController::class, 'cancel']);
 
-        // Mes factures
+        // Factures
         Route::get('/invoices', [InvoiceController::class, 'clientInvoices']);
         Route::get('/invoices/{id}/download', [InvoiceController::class, 'download']);
 
-        // Mes notifications
+        // Notifications (dupliquées sous /client pour compat frontend)
         Route::get('/notifications', [BookingController::class, 'getNotifications']);
         Route::put('/notifications/{id}/read', [BookingController::class, 'markNotificationAsRead']);
 
         // Paiement en ligne
         Route::post('/payments/initiate', [PaymentController::class, 'initiateOnlinePayment']);
         Route::get('/payments/status/{transaction_id}', [PaymentController::class, 'checkPaymentStatus']);
+        // ⚠ simulate DANS le groupe client (Auth::id() fiable → pas de faux 403)
+        Route::post('/payments/simulate', [PaymentController::class, 'simulateOnlinePayment']);
     });
 
 
     // ============================================
-    // RÉCEPTIONNISTE (rôle: receptionniste)
+    // RÉCEPTIONNISTE
     // ============================================
     Route::middleware('role:receptionniste')->prefix('receptionist')->group(function () {
         Route::get('/dashboard', [ReceptionistController::class, 'dashboard']);
         Route::get('/stats', [ReceptionistController::class, 'getStats']);
         Route::get('/chart-data', [ReceptionistController::class, 'getChartData']);
+        Route::get('/occupancy-chart', [ReceptionistController::class, 'getOccupancyChart']);
 
-        // Gestion des réservations (CRUD)
+        // Réservations
         Route::get('/bookings', [BookingController::class, 'receptionistBookings']);
         Route::get('/bookings/{id}', [BookingController::class, 'show']);
         Route::post('/bookings', [BookingController::class, 'store']);
         Route::put('/bookings/{id}', [BookingController::class, 'update']);
         Route::delete('/bookings/{id}', [BookingController::class, 'cancel']);
-
-        // Actions spécifiques
         Route::put('/bookings/{id}/validate', [BookingController::class, 'validateBooking']);
         Route::put('/bookings/{id}/confirm', [BookingController::class, 'confirm']);
 
@@ -106,22 +107,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/invoices/{id}/download', [InvoiceController::class, 'download']);
         Route::post('/invoices/{id}/send-email', [InvoiceController::class, 'sendByEmail']);
 
-        // Clients (pour créer une réservation au nom d'un client)
+        // Clients (créer une réservation au nom d'un client)
         Route::get('/clients', [ClientController::class, 'index']);
         Route::get('/clients/{id}', [ClientController::class, 'show']);
     });
 
 
     // ============================================
-    // CAISSIER (rôle: caissier)
+    // CAISSIER
     // ============================================
     Route::middleware('role:caissier')->prefix('cashier')->group(function () {
         Route::get('/dashboard', [CashierController::class, 'dashboard']);
         Route::get('/stats', [CashierController::class, 'getStats']);
+        Route::get('/chart-by-mode', [CashierController::class, 'getChartByMode']);
+        Route::get('/revenue-chart', [CashierController::class, 'getRevenueChart']);
 
-        // Gestion des paiements
-        // ⚠ CORRIGÉ : /payments/history AVANT /payments/{id}, sinon
-        // "history" est interprété comme un identifiant de paiement.
+        // Paiements — /history AVANT /{id}
         Route::get('/payments', [PaymentController::class, 'cashierPayments']);
         Route::get('/payments/history', [PaymentController::class, 'history']);
         Route::get('/payments/{id}', [PaymentController::class, 'show']);
@@ -129,53 +130,40 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/payments/{id}/validate', [PaymentController::class, 'validatePayment']);
         Route::put('/payments/{id}/cancel', [PaymentController::class, 'cancel']);
 
-        // Factures
         Route::post('/invoices', [InvoiceController::class, 'generateManually']);
 
-        // Réservations (consultation)
         Route::get('/bookings', [BookingController::class, 'cashierBookings']);
         Route::get('/bookings/{id}', [BookingController::class, 'show']);
     });
 
 
     // ============================================
-    // ADMIN (rôle: admin) - COMPLET
+    // ADMIN
     // ============================================
     Route::middleware('role:admin')->prefix('admin')->group(function () {
-
-        // ==========================================
-        // DASHBOARD & STATISTIQUES
-        // ==========================================
+        // Dashboard & stats
         Route::get('/dashboard', [AdminController::class, 'dashboard']);
         Route::get('/dashboard-full', [AdminController::class, 'dashboardFull']);
         Route::get('/stats', [AdminController::class, 'getStats']);
         Route::get('/chart-data', [AdminController::class, 'getChartData']);
         Route::get('/occupancy-data', [AdminController::class, 'getOccupancyData']);
         Route::get('/revenue-data', [AdminController::class, 'getRevenueData']);
-        // Note : /bookings/recent et /users/recent sont des routes fixes ;
-        // elles sont déjà déclarées avant /bookings/{id} et /users/{id}
-        // plus bas, donc pas de conflit — on les garde ici pour la lisibilité.
         Route::get('/bookings/recent', [AdminController::class, 'getRecentBookings']);
         Route::get('/users/recent', [AdminController::class, 'getRecentUsers']);
 
-
-        // ==========================================
-        // GESTION DES SALLES (CRUD complet)
-        // ==========================================
+        // Salles (CRUD + tarifs + image)
         Route::get('/rooms', [RoomController::class, 'adminIndex']);
         Route::post('/rooms', [RoomController::class, 'store']);
         Route::get('/rooms/{id}', [RoomController::class, 'show']);
         Route::put('/rooms/{id}', [RoomController::class, 'update']);
         Route::delete('/rooms/{id}', [RoomController::class, 'destroy']);
-
-        // Tarifs
         Route::get('/rooms/{id}/prices', [RoomController::class, 'getPrices']);
         Route::put('/rooms/{id}/prices', [RoomController::class, 'updatePrices']);
+        // Photo de salle
+        Route::post('/rooms/{id}/image', [RoomPhotoController::class, 'update']);
+        Route::delete('/rooms/{id}/image', [RoomPhotoController::class, 'destroy']);
 
-
-        // ==========================================
-        // GESTION DES UTILISATEURS (CRUD complet)
-        // ==========================================
+        // Utilisateurs
         Route::get('/users', [AdminController::class, 'getUsers']);
         Route::post('/users', [AdminController::class, 'storeUser']);
         Route::get('/users/{id}', [AdminController::class, 'getUser']);
@@ -183,56 +171,38 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/users/{id}', [AdminController::class, 'deleteUser']);
         Route::put('/users/{id}/role', [AdminController::class, 'updateUserRole']);
 
-
-        // ==========================================
-        // GESTION DES RÉSERVATIONS (CRUD complet + supervision)
-        // ==========================================
+        // Réservations (supervision)
         Route::get('/bookings', [BookingController::class, 'adminIndex']);
         Route::get('/bookings/{id}', [BookingController::class, 'show']);
         Route::put('/bookings/{id}', [BookingController::class, 'update']);
         Route::delete('/bookings/{id}', [BookingController::class, 'adminCancel']);
 
-
-        // ==========================================
-        // GESTION DES PAIEMENTS (supervision)
-        // ==========================================
+        // Paiements (supervision)
         Route::get('/payments', [PaymentController::class, 'adminIndex']);
         Route::get('/payments/{id}', [PaymentController::class, 'show']);
 
-
-        // ==========================================
-        // GESTION DES FACTURES (supervision)
-        // ==========================================
+        // Factures (supervision)
         Route::get('/invoices', [InvoiceController::class, 'adminIndex']);
         Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
 
-
-        // ==========================================
-        // GESTION DE LA FAQ (chatbot)
-        // ==========================================
+        // FAQ
         Route::get('/faq', [ChatbotController::class, 'adminGetFaq']);
         Route::post('/faq', [ChatbotController::class, 'storeFaq']);
         Route::put('/faq/{id}', [ChatbotController::class, 'updateFaq']);
         Route::delete('/faq/{id}', [ChatbotController::class, 'deleteFaq']);
 
-
-        // ==========================================
-        // CONFIGURATION
-        // ==========================================
+        // Configuration
         Route::get('/settings', [AdminController::class, 'getSettings']);
         Route::put('/settings', [AdminController::class, 'updateSettings']);
 
-
-        // ==========================================
-        // NOTIFICATIONS (supervision)
-        // ==========================================
+        // Notifications (supervision + diffusion)
         Route::get('/notifications', [NotificationController::class, 'adminIndex']);
         Route::post('/notifications/broadcast', [NotificationController::class, 'broadcast']);
     });
 
 
     // ============================================
-    // CHATBOT (protégé pour les clients connectés)
+    // CHATBOT (protégé — clients connectés & personnel)
     // ============================================
     Route::post('/chatbot/conversation/start', [ChatbotController::class, 'startConversation']);
     Route::post('/chatbot/message', [ChatbotController::class, 'sendMessage']);
@@ -243,7 +213,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 // ============================================
-// ROUTES WEBHOOK (paiement en ligne)
+// WEBHOOK (paiement en ligne — sans auth)
 // ============================================
 Route::post('/webhook/payment', [PaymentController::class, 'handleWebhook'])
     ->withoutMiddleware(['auth:sanctum']);

@@ -56,26 +56,24 @@ class Reservation extends Model
      *
      * "en_cours" et "terminee" ne sont JAMAIS écrits en base : ils sont
      * déduits en comparant date_debut/date_fin à l'heure actuelle, à
-     * chaque fois que la réservation est sérialisée en JSON. Pas de
-     * tâche planifiée (cron) nécessaire.
+     * chaque fois que la réservation est sérialisée en JSON.
      */
     public function getStatutEffectifAttribute()
     {
         if ($this->statut !== 'confirmee') {
-            // en_attente, validee, annulee restent tels quels
             return $this->statut;
         }
 
         $now = now();
 
         if ($now->lt($this->date_debut)) {
-            return 'confirmee'; // payée, créneau pas encore commencé
+            return 'confirmee';
         }
 
         if ($now->between($this->date_debut, $this->date_fin)) {
             return 'en_cours';
         }
 
-        return 'terminee'; // heure de fin dépassée
+        return 'terminee';
     }
 }

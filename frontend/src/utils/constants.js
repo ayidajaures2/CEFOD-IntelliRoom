@@ -50,6 +50,12 @@ export const MODES_PAIEMENT = [
   { value: "airtel_money", label: "Airtel Money" },
 ];
 
+// Frais Mobile Money (Tchad) — mêmes taux que le backend.
+export const OPERATOR_FEES = {
+  airtel_money: 1.8, // %
+  moov_money: 1.6,   // %
+};
+
 export const MODE_PAIEMENT_LABELS = Object.fromEntries(
   MODES_PAIEMENT.map((m) => [m.value, m.label])
 );

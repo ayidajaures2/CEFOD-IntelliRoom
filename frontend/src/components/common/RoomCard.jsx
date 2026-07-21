@@ -16,12 +16,18 @@ export default function RoomCard({ room }) {
       to={`/salles/${room.id_salle}`}
       className="card group flex flex-col overflow-hidden transition-shadow hover:shadow-lg focus-visible:shadow-lg"
     >
+      {room.image_url ? (
+        <div className="relative h-40 w-full overflow-hidden bg-ink">
+          <img src={room.image_url} alt={room.nom_salle} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <div className="absolute right-3 top-3"><StatutBadge statut={statut} /></div>
+        </div>
+      ) : null}
       <div className="flex items-center justify-between border-b border-ink/5 bg-ink px-5 py-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-paper/50">{room.type_salle}</p>
           <h3 className="font-display text-lg font-bold text-paper group-hover:text-accent">{room.nom_salle}</h3>
         </div>
-        <StatutBadge statut={statut} />
+        {!room.image_url && <StatutBadge statut={statut} />}
       </div>
       <div className="flex flex-1 flex-col gap-3 px-5 py-4">
         <p className="line-clamp-2 text-sm text-ink/60">{room.description || "Aucune description."}</p>

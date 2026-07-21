@@ -16,11 +16,12 @@ class Salle extends Model
         'capacite',
         'description',
         'equipements',
-        'statut'
+        'statut',
+        'image', // ✅ AJOUT — chemin de la photo de la salle
     ];
 
-    // Ajoute automatiquement statut_effectif dans le JSON renvoyé par l'API
-    protected $appends = ['statut_effectif'];
+    // statut_effectif (calculé) + image_url (URL complète) exposés dans le JSON
+    protected $appends = ['statut_effectif', 'image_url'];
 
     public function tarifs()
     {
@@ -60,5 +61,14 @@ class Salle extends Model
             ->exists();
 
         return $reserveeAVenir ? 'reservee' : 'libre';
+    }
+
+    /**
+     * ✅ AJOUT — URL complète de la photo (ou null). Le frontend affiche
+     * directement image_url ; nécessite `php artisan storage:link`.
+     */
+    public function getImageUrlAttribute()
+    {
+        return $this->image ? asset('storage/' . $this->image) : null;
     }
 }

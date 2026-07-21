@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { cancelBooking, fetchMyBookings, fetchBooking } from "../../api/bookingApi";
-import { initiateOnlinePayment } from "../../api/paymentApi";
+import { simulatePayment } from "../../api/paymentApi";
 import { useNotify } from "../../contexts/NotificationContext";
 import { useAuth } from "../../hooks/useAuth";
 import { usePolling } from "../../hooks/usePolling";
@@ -12,8 +12,9 @@ import StatutBadge from "../../components/common/StatutBadge";
 import Modal from "../../components/common/Modal";
 import { formatDateTime } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
-import { MODES_PAIEMENT } from "../../utils/constants";
+import { MODES_PAIEMENT, OPERATOR_FEES } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
+import { extractList } from "../../utils/extract";
 
 /**
  * Mes réservations + paiement en ligne : quand la réservation est `validee`,
@@ -42,7 +43,7 @@ export default function MyBookings() {
   const load = useCallback(async () => {
     try {
       const { data } = await fetchMyBookings();
-      setBookings(Array.isArray(data) ? data : data.data ?? []);
+      setBookings(extractList(data));
     } catch {
       toastError("Impossible de charger vos réservations.");
     } finally {
@@ -90,22 +91,36 @@ export default function MyBookings() {
   };
 
   const confirmPayment = async () => {
+    // Normalise vers le format serveur 235XXXXXXXX (retire +, espaces, 00 initial)
+    const tel = telephone.replace(/[^0-9]/g, "").replace(/^00/, "");
     setBusy(true);
     try {
-      await initiateOnlinePayment({
+      const { data } = await simulatePayment({
         id_reservation: paying.id_reservation,
         mode_paiement: mode,
-        telephone,
+        telephone: tel,
       });
-      success("Paiement initié. Suivez les instructions sur votre téléphone.");
+      success(`Paiement confirmé — ${formatMoney(data.total ?? total)} réglés. Facture générée.`);
       setPaying(null);
       load();
     } catch (e) {
-      toastError(apiErrorMessage(e, "Le paiement n'a pas pu être initié."));
+      toastError(apiErrorMessage(e, "Le paiement n'a pas pu être effectué."));
     } finally {
       setBusy(false);
     }
   };
+
+  // Frais opérateur (Tchad) : mêmes taux que le backend (Airtel 1,8 % / Moov 1,6 %),
+  // arrondi au multiple de 5 supérieur, bornes 40–3000 FCFA. Affichage indicatif ;
+  // le montant fait foi côté serveur.
+  const computeFrais = (montant, m) => {
+    const rate = OPERATOR_FEES?.[m];
+    if (!rate || montant == null) return 0;
+    let f = Math.ceil((montant * rate) / 100 / 5) * 5;
+    return Math.max(40, Math.min(f, 3000));
+  };
+  const frais = price != null ? computeFrais(price, mode) : 0;
+  const total = price != null ? price + frais : null;
 
   const onlineModes = MODES_PAIEMENT.filter((m) => m.value !== "especes");
 
@@ -179,12 +194,25 @@ export default function MyBookings() {
               Réservation de <strong className="text-ink">{paying.salle?.nom_salle ?? `salle #${paying.id_salle}`}</strong>,
               du {formatDateTime(paying.date_debut)} au {formatDateTime(paying.date_fin)}.
             </p>
-            <div className="rounded-xl bg-accent-soft p-4 text-center">
-              <p className="text-xs font-semibold uppercase tracking-wide text-accent-dark">Montant à payer</p>
-              <p className="font-display text-2xl font-black text-ink">
-                {price != null ? formatMoney(price) : "Calcul en cours…"}
-              </p>
-            </div>
+
+            {price == null && <p className="rounded-xl bg-accent-soft p-4 text-center text-sm text-ink/50">Calcul du montant…</p>}
+
+            {price != null && (
+              <div className="rounded-xl bg-accent-soft p-4 text-sm">
+                <div className="flex justify-between py-0.5">
+                  <span className="text-ink/60">Montant de la réservation</span>
+                  <span className="font-medium">{formatMoney(price)}</span>
+                </div>
+                <div className="flex justify-between py-0.5">
+                  <span className="text-ink/60">Frais de transaction ({OPERATOR_FEES?.[mode] ?? 0}%)</span>
+                  <span className="font-medium">{formatMoney(frais)}</span>
+                </div>
+                <div className="mt-1 flex justify-between border-t border-ink/10 pt-2">
+                  <span className="font-display font-bold">Total à payer</span>
+                  <span className="font-display text-lg font-black text-accent-dark">{formatMoney(total)}</span>
+                </div>
+              </div>
+            )}
             <div>
               <span className="field-label">Moyen de paiement</span>
               <div className="grid grid-cols-2 gap-2">
@@ -202,16 +230,16 @@ export default function MyBookings() {
               </div>
             </div>
             <div>
-              <label className="field-label" htmlFor="pay-tel">Numéro Mobile Money</label>
+              <label className="field-label" htmlFor="pay-tel">Numéro Mobile Money (Tchad +235)</label>
               <input
                 id="pay-tel" className="field" value={telephone}
                 onChange={(e) => setTelephone(e.target.value)}
-                placeholder="66 00 00 00" inputMode="tel"
+                placeholder="235XXXXXXXX" inputMode="tel"
               />
-              <p className="mt-1 text-xs text-ink/45">La demande de confirmation sera envoyée sur ce numéro.</p>
+              <p className="mt-1 text-xs text-ink/45">Format : 235XXXXXXXX (numéro tchadien).</p>
             </div>
             <button className="btn-dark w-full" onClick={confirmPayment} disabled={busy || !telephone.trim()}>
-              {busy ? "Initialisation…" : "Confirmer le paiement"}
+              {busy ? "Traitement…" : "Simuler le paiement"}
             </button>
           </div>
         )}

@@ -33,4 +33,31 @@ class CashierController extends Controller
             'totalRevenue' => Paiement::where('statut', 'valide')->sum('montant') ?? 0,
         ];
     }
+
+    // Paiements par mode (donut) — uniquement les paiements validés
+    public function getChartByMode()
+    {
+        return response()->json([
+            ['name' => 'Espèces',      'value' => Paiement::where('mode_paiement','especes')->where('statut','valide')->count()],
+            ['name' => 'Moov Money',   'value' => Paiement::where('mode_paiement','moov_money')->where('statut','valide')->count()],
+            ['name' => 'Airtel Money', 'value' => Paiement::where('mode_paiement','airtel_money')->where('statut','valide')->count()],
+        ]);
+    }
+
+    // Encaissements des 7 derniers jours (barres)
+    public function getRevenueChart()
+    {
+        $data = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = now()->subDays($i);
+            $montant = Paiement::where('statut','valide')
+                ->whereDate('date_paiement', $date->toDateString())
+                ->sum('montant');
+            $data[] = [
+                'jour' => ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][$date->dayOfWeekIso - 1],
+                'montant' => (float) $montant,
+            ];
+        }
+        return response()->json($data);
+    }
 }

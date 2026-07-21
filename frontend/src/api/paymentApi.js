@@ -10,4 +10,5 @@ export const fetchPaymentHistory = () => api.get(ENDPOINTS.payments.history);
 
 // Client — paiement en ligne (Moov / Airtel)
 export const initiateOnlinePayment = (payload) => api.post(ENDPOINTS.payments.initiate, payload);
+export const simulatePayment = (payload) => api.post(ENDPOINTS.payments.simulate, payload);
 export const checkPaymentStatus = (tx) => api.get(ENDPOINTS.payments.status(tx));

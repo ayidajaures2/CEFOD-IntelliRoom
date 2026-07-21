@@ -96,4 +96,20 @@ class ReceptionistController extends Controller
         $occupied = $salles->filter(fn ($s) => $s->statut_effectif === 'occupee')->count();
         return round(($occupied / $total) * 100);
     }
+
+    // Donut d'occupation pour le dashboard réception
+    public function getOccupancyChart()
+    {
+        $salles = \App\Models\Salle::all();
+        $counts = ['libre' => 0, 'reservee' => 0, 'occupee' => 0];
+        foreach ($salles as $s) {
+            $st = $s->statut_effectif;
+            $counts[$st] = ($counts[$st] ?? 0) + 1;
+        }
+        return response()->json([
+            ['name' => 'Libre',    'value' => $counts['libre']],
+            ['name' => 'Réservée', 'value' => $counts['reservee']],
+            ['name' => 'Occupée',  'value' => $counts['occupee']],
+        ]);
+    }
 }

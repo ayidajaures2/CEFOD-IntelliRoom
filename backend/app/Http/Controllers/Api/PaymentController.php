@@ -40,18 +40,45 @@ class PaymentController extends Controller
         ]);
     }
 
-    /**
-     * ⚠ CORRIGÉ : renvoie un tableau (utilisé en interne) — l'ancien
-     * getCashierStats public était embarqué tel quel dans cashierPayments.
-     */
     private function cashierStatsArray(): array
     {
         return [
             'pendingPayments' => Paiement::where('statut', 'en_attente')->count(),
             'validatedPayments' => Paiement::where('statut', 'valide')->count(),
             'cancelledPayments' => Paiement::where('statut', 'annule')->count(),
-            'totalRevenue' => Paiement::where('statut', 'valide')->sum('montant') ?? 0,
+            // ⚠ CORRIGÉ : sum('total') sur colonne générée peut échouer si
+            // la colonne est VIRTUAL (non STORED). montant+frais = même
+            // résultat, robuste partout.
+            'totalRevenue' => (Paiement::where('statut', 'valide')->sum('montant') ?? 0)
+                + (Paiement::where('statut', 'valide')->sum('frais') ?? 0),
         ];
+    }
+
+    /**
+     * Calcul des frais selon l'opérateur (Tchad)
+     */
+    private function calculateFrais($montant, $mode_paiement)
+    {
+        $rates = [
+            'airtel_money' => 1.8, // 1.8%
+            'moov_money' => 1.6,   // 1.6%
+        ];
+
+        $rate = $rates[$mode_paiement] ?? 0;
+
+        if ($rate <= 0) {
+            return 0;
+        }
+
+        $frais = $montant * ($rate / 100);
+        $frais = ceil($frais);          // arrondi entier supérieur
+        $frais = ceil($frais / 5) * 5;  // multiple de 5
+
+        $min = 40;
+        $max = 3000;
+        $frais = max($min, min($frais, $max));
+
+        return $frais;
     }
 
     /**
@@ -62,6 +89,7 @@ class PaymentController extends Controller
         $validated = $request->validate([
             'id_reservation' => 'required|exists:reservation,id_reservation',
             'montant' => 'required|numeric|min:0',
+            'frais' => 'nullable|numeric|min:0',
             'mode_paiement' => 'required|in:especes,moov_money,airtel_money',
             'reference' => 'nullable|string|max:100',
         ]);
@@ -72,8 +100,6 @@ class PaymentController extends Controller
         }
 
         $existing = Paiement::where('id_reservation', $validated['id_reservation'])
-            // ⚠ CORRIGÉ : un paiement ANNULÉ ne doit pas bloquer un nouvel
-            // encaissement — seuls en_attente/valide comptent.
             ->whereIn('statut', ['en_attente', 'valide'])
             ->first();
         if ($existing) {
@@ -92,10 +118,17 @@ class PaymentController extends Controller
         DB::beginTransaction();
 
         try {
+            // Frais : 0 pour espèces, calculés pour Mobile Money.
+            $frais = 0;
+            if ($validated['mode_paiement'] === 'moov_money' || $validated['mode_paiement'] === 'airtel_money') {
+                $frais = $this->calculateFrais($validated['montant'], $validated['mode_paiement']);
+            }
+
             $paiement = Paiement::create([
                 'id_reservation' => $validated['id_reservation'],
                 'id_caissier' => Auth::id(),
                 'montant' => $validated['montant'],
+                'frais' => $frais,
                 'mode_paiement' => $validated['mode_paiement'],
                 'statut' => 'valide',
                 'reference' => $validated['reference'] ?? 'PAY-' . time(),
@@ -106,7 +139,6 @@ class PaymentController extends Controller
             $reservation->save();
 
             $facture = $this->generateInvoice($paiement);
-
             $this->notifyClient($reservation, 'Paiement confirmé');
 
             DB::commit();
@@ -245,10 +277,6 @@ class PaymentController extends Controller
 
     /**
      * CAISSIER - Historique des paiements
-     *
-     * ⚠ CORRIGÉ : le résumé réutilisait $query APRÈS paginate() en le
-     * mutant avec des where() supplémentaires — comptes faux. On clone
-     * proprement la requête de base pour chaque agrégat.
      */
     public function history(Request $request)
     {
@@ -271,11 +299,17 @@ class PaymentController extends Controller
             ->orderBy('date_paiement', 'desc')
             ->paginate(20);
 
+        // ⚠ CORRIGÉ : totalWithFrais = montant + frais (pas sum('total')).
+        $sumMontant = (clone $base)->sum('montant') ?? 0;
+        $sumFrais = (clone $base)->sum('frais') ?? 0;
+
         return response()->json([
             'data' => $payments,
             'summary' => [
                 'total' => (clone $base)->count(),
-                'totalAmount' => (clone $base)->sum('montant') ?? 0,
+                'totalAmount' => $sumMontant,
+                'totalFrais' => $sumFrais,
+                'totalWithFrais' => $sumMontant + $sumFrais,
                 'validated' => (clone $base)->where('statut', 'valide')->count(),
                 'pending' => (clone $base)->where('statut', 'en_attente')->count(),
                 'cancelled' => (clone $base)->where('statut', 'annule')->count(),
@@ -303,11 +337,17 @@ class PaymentController extends Controller
             });
         }
 
+        // ⚠ CORRIGÉ : totalWithFrais = montant + frais (pas sum('total')).
+        $sumMontant = Paiement::where('statut', 'valide')->sum('montant') ?? 0;
+        $sumFrais = Paiement::where('statut', 'valide')->sum('frais') ?? 0;
+
         return response()->json([
             'data' => $query->paginate(20),
             'stats' => [
                 'total' => Paiement::count(),
-                'totalAmount' => Paiement::where('statut', 'valide')->sum('montant') ?? 0,
+                'totalAmount' => $sumMontant,
+                'totalFrais' => $sumFrais,
+                'totalWithFrais' => $sumMontant + $sumFrais,
                 'byMode' => $this->getPaymentStatsByMode(),
                 'byStatus' => [
                     'valide' => Paiement::where('statut', 'valide')->count(),
@@ -328,7 +368,115 @@ class PaymentController extends Controller
     }
 
     /**
-     * PAIEMENT EN LIGNE - Initier un paiement
+     * SIMULATION - Paiement en ligne HUB2 (Tchad).
+     * Route : POST /client/payments/simulate (dans le groupe role:client,
+     * donc Auth::id() est fiable — c'était la cause du faux 403).
+     */
+    public function simulateOnlinePayment(Request $request)
+    {
+        $validated = $request->validate([
+            'id_reservation' => 'required|exists:reservation,id_reservation',
+            'mode_paiement' => 'required|in:moov_money,airtel_money',
+            'telephone' => 'required|string|max:20',
+        ]);
+
+        // Numéro tchadien : 235 + 8 chiffres (le + et les espaces sont retirés)
+        $phone = preg_replace('/[^0-9]/', '', $validated['telephone']);
+        if (!preg_match('/^235\d{8}$/', $phone)) {
+            return response()->json([
+                'message' => 'Numéro invalide. Format attendu : 235XXXXXXXX (numéro tchadien).'
+            ], 422);
+        }
+
+        $reservation = Reservation::with(['client', 'salle'])->find($validated['id_reservation']);
+
+        if (!$reservation) {
+            return response()->json(['message' => 'Réservation non trouvée'], 404);
+        }
+
+        if ((int) $reservation->id_client !== (int) Auth::id()) {
+            return response()->json(['message' => 'Cette réservation ne vous appartient pas'], 403);
+        }
+
+        if ($reservation->statut !== 'validee') {
+            return response()->json([
+                'message' => 'La réservation doit être validée par la réception avant le paiement (statut actuel : ' . $reservation->statut . ').'
+            ], 400);
+        }
+
+        $existing = Paiement::where('id_reservation', $validated['id_reservation'])
+            ->whereIn('statut', ['en_attente', 'valide'])
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'message' => 'Un paiement est déjà en cours pour cette réservation',
+                'paiement' => $existing
+            ], 409);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $montant = $this->calculatePrice($reservation);
+            $frais = $this->calculateFrais($montant, $validated['mode_paiement']);
+
+            $transactionId = 'SIM-TD-' . time() . '-' . strtoupper(substr(uniqid(), -6));
+
+            $paiement = Paiement::create([
+                'id_reservation' => $validated['id_reservation'],
+                'id_caissier' => null,
+                'montant' => $montant,
+                'frais' => $frais,
+                // 'total' non renseigné : colonne générée par MySQL.
+                'mode_paiement' => $validated['mode_paiement'],
+                'statut' => 'valide', // simulation : succès immédiat
+                'reference' => $transactionId,
+                'date_paiement' => now(),
+            ]);
+
+            $reservation->statut = 'confirmee';
+            $reservation->save();
+
+            $facture = $this->generateInvoice($paiement);
+            $this->notifyClient($reservation, 'Paiement confirmé');
+
+            DB::commit();
+
+            $rates = ['airtel_money' => 1.8, 'moov_money' => 1.6];
+            $rate = $rates[$validated['mode_paiement']] ?? 0;
+
+            return response()->json([
+                'message' => 'Paiement simulé avec succès. Réservation confirmée.',
+                'paiement' => $paiement->load(['reservation.client', 'reservation.salle']),
+                'simulation' => [
+                    'operator' => $validated['mode_paiement'],
+                    'rate' => $rate,
+                    'frais' => $frais,
+                    'total' => $montant + $frais,
+                    'transaction_id' => $transactionId,
+                    'country' => 'Tchad (TD)',
+                ],
+                'montant' => $montant,
+                'frais' => $frais,
+                'total' => $montant + $frais,
+                'facture' => $facture
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Erreur simulation paiement', ['error' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Erreur lors de la simulation du paiement',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * PAIEMENT EN LIGNE - Initier (V2, vrai HUB2 : statut en_attente)
+     * Conservé pour l'intégration future ; la simulation ci-dessus est
+     * ce que le frontend appelle aujourd'hui.
      */
     public function initiateOnlinePayment(Request $request)
     {
@@ -344,7 +492,7 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Réservation non trouvée'], 404);
         }
 
-        if ($reservation->id_client !== Auth::id()) {
+        if ((int) $reservation->id_client !== (int) Auth::id()) {
             return response()->json(['message' => 'Cette réservation ne vous appartient pas'], 403);
         }
 
@@ -368,10 +516,14 @@ class PaymentController extends Controller
         DB::beginTransaction();
 
         try {
+            $montant = $this->calculatePrice($reservation);
+            $frais = $this->calculateFrais($montant, $validated['mode_paiement']);
+
             $paiement = Paiement::create([
                 'id_reservation' => $validated['id_reservation'],
                 'id_caissier' => null,
-                'montant' => $this->calculatePrice($reservation),
+                'montant' => $montant,
+                'frais' => $frais,
                 'mode_paiement' => $validated['mode_paiement'],
                 'statut' => 'en_attente',
                 'reference' => 'ONLINE-' . time() . '-' . $reservation->id_reservation,
@@ -379,9 +531,6 @@ class PaymentController extends Controller
             ]);
 
             DB::commit();
-
-            // TODO : appel réel à l'API Moov Money / Airtel Money ici
-            // $response = $this->callPaymentGateway($paiement, $validated['telephone']);
 
             return response()->json([
                 'message' => 'Paiement initié',
@@ -409,18 +558,19 @@ class PaymentController extends Controller
         return response()->json([
             'paiement' => $paiement,
             'status' => $paiement->statut,
+            'montant' => $paiement->montant,
+            'frais' => $paiement->frais,
+            'total' => $paiement->total,
             'message' => $paiement->statut === 'valide' ? 'Paiement confirmé' : 'En attente'
         ]);
     }
 
     /**
-     * WEBHOOK - Confirmation de paiement en ligne
+     * WEBHOOK - Confirmation de paiement en ligne (HUB2)
      */
     public function handleWebhook(Request $request)
     {
         Log::info('Webhook reçu', $request->all());
-
-        // TODO : vérifier la signature du webhook avant de faire confiance à son contenu
 
         $transaction_id = $request->input('transaction_id');
         $status = $request->input('status');
@@ -459,9 +609,6 @@ class PaymentController extends Controller
 
     private function generateInvoice($paiement)
     {
-        // ⚠ CORRIGÉ : count()+1 provoque des collisions de numéro après
-        // une suppression de facture (contrainte UNIQUE violée). On repart
-        // du dernier id, insensible aux trous.
         $next = (Facture::max('id_facture') ?? 0) + 1;
         return Facture::create([
             'id_paiement' => $paiement->id_paiement,
@@ -476,21 +623,12 @@ class PaymentController extends Controller
             'id_utilisateur' => $reservation->id_client,
             'titre' => $message,
             'contenu' => 'Votre paiement pour la réservation du ' . $reservation->date_debut->format('d/m/Y à H:i') . ' a été traité.',
-            'type' => 'confirmation',
+            'type' => 'paiement', // ⚠ CORRIGÉ : type cohérent (nécessite l'ENUM mis à jour)
             'est_lu' => false,
             'date_creation' => now(),
         ]);
     }
 
-    /**
-     * Calculer le prix de la réservation à partir de la table TarifSalle.
-     *
-     * ⚠ CORRIGÉ (ex-"POINT OUVERT") : la catégorie tarifaire vient
-     * désormais du PROFIL DU CLIENT (utilisateur.categorie_client,
-     * déclarée à l'inscription, corrigeable par l'admin uniquement) —
-     * plus de valeur devinée. Repli sur 'association_base' seulement
-     * pour les anciens comptes créés avant la migration.
-     */
     private function calculatePrice($reservation)
     {
         $reservation->loadMissing(['salle.tarifs', 'client']);
@@ -500,7 +638,6 @@ class PaymentController extends Controller
         $tarif = $reservation->salle->tarifs
             ->where('categorie_client', $categorieClient)
             ->first()
-            // Repli : premier tarif si la grille de cette salle est incomplète
             ?? $reservation->salle->tarifs->first();
 
         if (!$tarif) {

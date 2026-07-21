@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { fetchAllBookings } from "../../api/bookingApi";
 import { fetchOccupation } from "../../api/roomApi";
@@ -6,6 +6,10 @@ import { usePolling } from "../../hooks/usePolling";
 import PageHeader from "../../components/common/PageHeader";
 import StatutBadge from "../../components/common/StatutBadge";
 import { formatDateTime } from "../../utils/formatDate";
+import { fetchReceptionChart, fetchReceptionOccupancy } from "../../api/chartApi";
+import { StackedBars, DonutChart, ChartCard } from "../../components/common/Charts";
+import StatCard from "../../components/common/StatCard";
+import { LuHourglass, LuCircleCheck, LuBuilding2 } from "react-icons/lu";
 
 export default function ReceptionistDashboard() {
   const [bookings, setBookings] = useState([]);
@@ -20,6 +24,13 @@ export default function ReceptionistDashboard() {
   }, []);
   usePolling(load, 10000);
 
+  const [chart, setChart] = useState([]);
+  const [occ, setOcc] = useState([]);
+  useEffect(() => {
+    fetchReceptionChart().then(({ data }) => setChart(Array.isArray(data) ? data : data.data ?? [])).catch(() => {});
+    fetchReceptionOccupancy().then(({ data }) => setOcc(Array.isArray(data) ? data : data.data ?? [])).catch(() => {});
+  }, []);
+
   const pending = bookings.filter((b) => b.statut === "en_attente");
   const occupied = rooms.filter((r) => (r.statut_effectif ?? r.statut) === "occupee").length;
   const free = rooms.filter((r) => (r.statut_effectif ?? r.statut) === "libre").length;
@@ -33,18 +44,9 @@ export default function ReceptionistDashboard() {
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <div className="card border-accent/40 bg-accent-soft p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-accent-dark">Demandes en attente</p>
-          <p className="mt-1 font-display text-3xl font-black text-accent-dark">{pending.length}</p>
-        </div>
-        <div className="card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">Salles libres maintenant</p>
-          <p className="mt-1 font-display text-3xl font-black">{free}</p>
-        </div>
-        <div className="card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">Salles occupées</p>
-          <p className="mt-1 font-display text-3xl font-black">{occupied}</p>
-        </div>
+        <StatCard label="Demandes en attente" value={pending.length} icon={LuHourglass} accent />
+        <StatCard label="Salles libres maintenant" value={free} icon={LuCircleCheck} />
+        <StatCard label="Salles occupées" value={occupied} icon={LuBuilding2} />
       </div>
 
       <section className="card p-5">
@@ -70,6 +72,23 @@ export default function ReceptionistDashboard() {
           </ul>
         )}
       </section>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+        <ChartCard title="Demandes des 7 derniers jours">
+          <StackedBars
+            data={chart}
+            xKey="jour"
+            series={[
+              { key: "en_attente", name: "En attente" },
+              { key: "effectuees", name: "Effectuées" },
+              { key: "annulees", name: "Annulées" },
+            ]}
+          />
+        </ChartCard>
+        <ChartCard title="Occupation actuelle des salles">
+          <DonutChart data={occ} />
+        </ChartCard>
+      </div>
     </>
   );
 }

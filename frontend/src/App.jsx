@@ -20,7 +20,7 @@ import MyBookings from "./pages/client/MyBookings";
 import ClientInvoices from "./pages/client/Invoices";
 import InvoiceDetail from "./pages/client/InvoiceDetail";
 import ClientConversation from "./pages/client/Conversation";
-import ClientProfile from "./pages/client/Profile";
+import Profile from "./pages/common/Profile";
 
 // Réceptionniste
 import ReceptionistDashboard from "./pages/receptionist/ReceptionistDashboard";
@@ -39,7 +39,6 @@ import ManageRooms from "./pages/admin/ManageRooms";
 import ManageUsers from "./pages/admin/ManageUsers";
 import Reports from "./pages/admin/Reports";
 import Settings from "./pages/admin/Settings";
-import AdminProfile from "./pages/admin/Profile";
 
 export default function App() {
   return (
@@ -66,7 +65,7 @@ export default function App() {
           <Route path="/client/factures" element={<ClientInvoices />} />
           <Route path="/client/factures/:id" element={<InvoiceDetail />} />
           <Route path="/client/messages" element={<ClientConversation />} />
-          <Route path="/client/profil" element={<ClientProfile />} />
+          <Route path="/client/profil" element={<Profile />} />
         </Route>
       </Route>
 
@@ -78,6 +77,7 @@ export default function App() {
           <Route path="/reception/conversations" element={<ConversationsList />} />
           <Route path="/reception/conversations/:id" element={<ConversationDetail />} />
           <Route path="/reception/factures" element={<ReceptionistInvoices />} />
+          <Route path="/reception/profil" element={<Profile />} />
         </Route>
       </Route>
 
@@ -86,6 +86,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/caisse" element={<CashierDashboard />} />
           <Route path="/caisse/paiements" element={<CashierPayments />} />
+          <Route path="/caisse/profil" element={<Profile />} />
         </Route>
       </Route>
 
@@ -97,7 +98,7 @@ export default function App() {
           <Route path="/admin/utilisateurs" element={<ManageUsers />} />
           <Route path="/admin/rapports" element={<Reports />} />
           <Route path="/admin/parametres" element={<Settings />} />
-          <Route path="/admin/profil" element={<AdminProfile />} />
+          <Route path="/admin/profil" element={<Profile />} />
         </Route>
       </Route>
 

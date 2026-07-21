@@ -13,7 +13,7 @@ export default function MessageBubble({ message, own }) {
             ? "rounded-br-sm bg-ink text-paper"
             : message.expediteur === "chatbot"
               ? "rounded-bl-sm border border-accent/30 bg-accent-soft text-ink"
-              : "rounded-bl-sm border border-ink/10 bg-paper text-ink"
+              : "rounded-bl-sm border border-ink/10 bg-surface text-ink"
         }`}
       >
         <p className="whitespace-pre-wrap">{message.contenu_mess ?? message.contenu}</p>

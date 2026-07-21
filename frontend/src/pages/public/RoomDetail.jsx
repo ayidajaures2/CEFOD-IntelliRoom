@@ -45,6 +45,12 @@ export default function RoomDetail() {
     <div className="mx-auto max-w-5xl px-4 py-10">
       <Link to="/salles" className="text-sm text-ink/55 hover:text-accent">← Toutes les salles</Link>
 
+      {room.image_url && (
+        <div className="mt-4 h-64 w-full overflow-hidden rounded-2xl bg-ink sm:h-80">
+          <img src={room.image_url} alt={room.nom_salle} className="h-full w-full object-cover" />
+        </div>
+      )}
+
       <div className="mt-4 grid gap-8 lg:grid-cols-[1.6fr_1fr]">
         <div>
           <div className="flex flex-wrap items-center gap-3">

@@ -30,6 +30,7 @@ export const ENDPOINTS = {
   profile: {
     update: "/profile",            // PUT AuthController::updateProfile
     password: "/profile/password", // PUT AuthController::changePassword
+    photo: "/profile/photo",       // POST (upload) / DELETE (avatar)
   },
 
   rooms: {
@@ -42,6 +43,7 @@ export const ENDPOINTS = {
     update: (id) => `/admin/rooms/${id}`,
     destroy: (id) => `/admin/rooms/${id}`,
     prices: (id) => `/admin/rooms/${id}/prices`, // GET / PUT grille TarifSalle
+    image: (id) => `/admin/rooms/${id}/image`,   // POST (upload) / DELETE
   },
 
   bookings: {
@@ -65,6 +67,7 @@ export const ENDPOINTS = {
     history: "/cashier/payments/history",
     // Client — paiement en ligne (Moov / Airtel)
     initiate: "/client/payments/initiate",
+    simulate: "/client/payments/simulate",
     status: (tx) => `/client/payments/status/${tx}`,
   },
 
@@ -90,6 +93,16 @@ export const ENDPOINTS = {
     // Routes communes à tous les rôles connectés (api.php v3).
     list: () => "/notifications",
     read: (id) => `/notifications/${id}/read`,
+  },
+
+  charts: {
+    adminChart: "/admin/chart-data",
+    adminOccupancy: "/admin/occupancy-data",
+    adminRevenue: "/admin/revenue-data",
+    receptionChart: "/receptionist/chart-data",
+    receptionOccupancy: "/receptionist/occupancy-chart",
+    cashierByMode: "/cashier/chart-by-mode",
+    cashierRevenue: "/cashier/revenue-chart",
   },
 
   admin: {

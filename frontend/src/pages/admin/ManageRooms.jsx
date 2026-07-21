@@ -8,12 +8,15 @@ import EmptyState from "../../components/common/EmptyState";
 import StatutBadge from "../../components/common/StatutBadge";
 import Modal from "../../components/common/Modal";
 import RoomForm from "../../components/forms/RoomForm";
+import ImageUploader from "../../components/common/ImageUploader";
+import { uploadRoomImage, deleteRoomImage } from "../../api/mediaApi";
 import { apiErrorMessage } from "../../utils/apiError";
 
 export default function ManageRooms() {
   const { rooms, loading, reload } = useRooms();
   const { success, error: toastError } = useNotify();
   const [editing, setEditing] = useState(null);   // salle en édition
+  const [photoRoom, setPhotoRoom] = useState(null); // salle dont on gère la photo
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -57,6 +60,25 @@ export default function ManageRooms() {
     }
   };
 
+  const changePhoto = async (file) => {
+    try {
+      await uploadRoomImage(photoRoom.id_salle, file);
+      success("Photo de la salle mise à jour.");
+      reload();
+    } catch (e) {
+      toastError(apiErrorMessage(e, "Envoi de la photo impossible."));
+    }
+  };
+  const removePhoto = async () => {
+    try {
+      await deleteRoomImage(photoRoom.id_salle);
+      success("Photo retirée.");
+      reload();
+    } catch (e) {
+      toastError(apiErrorMessage(e, "Suppression impossible."));
+    }
+  };
+
   return (
     <>
       <PageHeader
@@ -86,6 +108,7 @@ export default function ManageRooms() {
                   <td><StatutBadge statut={r.statut_effectif ?? r.statut} /></td>
                   <td className="text-right">
                     <div className="flex justify-end gap-2">
+                      <button className="btn-ghost px-3 py-1.5 text-xs" onClick={() => setPhotoRoom(r)}>Photo</button>
                       <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => setEditing(r)}>Modifier</button>
                       <button className="btn-ghost px-3 py-1.5 text-xs text-accent-dark" onClick={() => remove(r)}>Supprimer</button>
                     </div>
@@ -96,6 +119,19 @@ export default function ManageRooms() {
           </table>
         </div>
       )}
+
+      <Modal open={Boolean(photoRoom)} title={photoRoom ? `Photo — ${photoRoom.nom_salle}` : ""} onClose={() => setPhotoRoom(null)}>
+        {photoRoom && (
+          <ImageUploader
+            shape="square"
+            label="Photo de la salle"
+            hint="JPG, PNG ou WebP — 4 Mo max"
+            currentUrl={(rooms.find((x) => x.id_salle === photoRoom.id_salle)?.image_url) ?? photoRoom.image_url}
+            onUpload={changePhoto}
+            onDelete={((rooms.find((x) => x.id_salle === photoRoom.id_salle)?.image_url) ?? photoRoom.image_url) ? removePhoto : undefined}
+          />
+        )}
+      </Modal>
 
       <Modal open={creating || Boolean(editing)} wide title={editing ? `Modifier « ${editing.nom_salle} »` : "Nouvelle salle"}
         onClose={() => { setCreating(false); setEditing(null); }}>

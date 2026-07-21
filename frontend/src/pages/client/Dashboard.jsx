@@ -7,7 +7,10 @@ import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
 import StatutBadge from "../../components/common/StatutBadge";
 import { formatDateTime } from "../../utils/formatDate";
-import { CATEGORIE_CLIENT_LABELS } from "../../utils/constants";
+import { CATEGORIE_CLIENT_LABELS, STATUT_RESERVATION_LABELS } from "../../utils/constants";
+import { useMemo } from "react";
+import { DonutChart, ChartCard } from "../../components/common/Charts";
+import { LuCalendarDays, LuHourglass, LuWallet } from "react-icons/lu";
 
 export default function ClientDashboard() {
   const { user } = useAuth();
@@ -29,6 +32,12 @@ export default function ClientDashboard() {
   const toPay = bookings.filter((b) => b.statut === "validee").length;
   const pending = bookings.filter((b) => b.statut === "en_attente").length;
 
+  const byStatus = useMemo(() => {
+    const c = {};
+    bookings.forEach((b) => { const k = b.statut_effectif ?? b.statut; c[k] = (c[k] ?? 0) + 1; });
+    return Object.entries(c).map(([k, v]) => ({ name: STATUT_RESERVATION_LABELS[k] ?? k, value: v }));
+  }, [bookings]);
+
   return (
     <>
       <PageHeader
@@ -40,16 +49,30 @@ export default function ClientDashboard() {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         {[
-          ["Réservations", bookings.length, "/client/reservations"],
-          ["En attente de validation", pending, "/client/reservations"],
-          ["À payer", toPay, "/client/reservations"],
-        ].map(([label, value, to]) => (
-          <Link key={label} to={to} className="card p-5 transition-shadow hover:shadow-md">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">{label}</p>
-            <p className="mt-1 font-display text-3xl font-black text-accent-dark">{loading ? "…" : value}</p>
+          { label: "Réservations", value: bookings.length, to: "/client/reservations", icon: LuCalendarDays },
+          { label: "En attente de validation", value: pending, to: "/client/reservations", icon: LuHourglass },
+          { label: "À payer", value: toPay, to: "/client/reservations", icon: LuWallet, accent: true },
+        ].map((c) => {
+          const Icon = c.icon;
+          return (
+          <Link key={c.label} to={c.to} className="card card-hover flex items-center gap-4 p-5">
+            <span className={`stat-icon ${c.accent ? "bg-accent text-white" : ""}`}><Icon className="h-6 w-6" strokeWidth={2} /></span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">{c.label}</p>
+              <p className="mt-0.5 font-display text-2xl font-black leading-tight">{loading ? "…" : c.value}</p>
+            </div>
           </Link>
-        ))}
+          );
+        })}
       </div>
+
+      {bookings.length > 0 && (
+        <div className="mb-6">
+          <ChartCard title="Répartition de mes réservations">
+            <DonutChart data={byStatus} height={240} />
+          </ChartCard>
+        </div>
+      )}
 
       <section className="card p-5">
         <div className="mb-3 flex items-center justify-between">
