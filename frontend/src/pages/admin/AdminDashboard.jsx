@@ -7,8 +7,10 @@ import Loader from "../../components/common/Loader";
 import StatutBadge from "../../components/common/StatutBadge";
 import { formatDateTime } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
-import { fetchAdminChart, fetchAdminOccupancy, fetchAdminRevenue } from "../../api/chartApi";
-import { BarsChart, DonutChart, ChartCard } from "../../components/common/Charts";
+import {
+  fetchAdminChart, fetchAdminOccupancy, fetchAdminRevenue, fetchAdminRevenueMonthly,
+} from "../../api/chartApi";
+import { BarsChart, DonutChart, AreaTrend, ChartCard } from "../../components/common/Charts";
 import StatCard from "../../components/common/StatCard";
 import { LuCalendarDays, LuHourglass, LuChartBar, LuBanknote } from "react-icons/lu";
 
@@ -17,14 +19,19 @@ export default function AdminDashboard() {
   const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [chart, setChart] = useState([]);
-  const [occ, setOcc] = useState([]);
-  const [rev, setRev] = useState([]);
+  const [chart, setChart] = useState([]);      // réservations par mois
+  const [occ, setOcc] = useState([]);          // occupation (donut)
+  const [rev, setRev] = useState([]);          // revenus par salle (barres)
+  const [revMonthly, setRevMonthly] = useState([]); // revenus par mois (courbe)
+
   useEffect(() => {
-    fetchAdminChart().then(({ data }) => setChart(Array.isArray(data) ? data : data.data ?? [])).catch(() => {});
-    fetchAdminOccupancy().then(({ data }) => setOcc(Array.isArray(data) ? data : data.data ?? [])).catch(() => {});
-    fetchAdminRevenue().then(({ data }) => setRev(Array.isArray(data) ? data : data.data ?? [])).catch(() => {});
+    const grab = (setter) => ({ data }) => setter(Array.isArray(data) ? data : data.data ?? []);
+    fetchAdminChart().then(grab(setChart)).catch(() => {});
+    fetchAdminOccupancy().then(grab(setOcc)).catch(() => {});
+    fetchAdminRevenue().then(grab(setRev)).catch(() => {});
+    fetchAdminRevenueMonthly().then(grab(setRevMonthly)).catch(() => {});
   }, []);
+
   useEffect(() => {
     Promise.allSettled([fetchStats(), fetchAllBookings()])
       .then(([s, b]) => {
@@ -58,6 +65,16 @@ export default function AdminDashboard() {
             {cards.map((c) => (
               <StatCard key={c.label} label={c.label} value={c.value} icon={c.icon} accent={c.accent} />
             ))}
+          </div>
+
+          {/* Courbes évolutives (tendances dans le temps) — pleine largeur */}
+          <div className="mb-6 grid gap-6">
+            <ChartCard title="Évolution des réservations (6 derniers mois)">
+              <AreaTrend data={chart} dataKey="reservations" xKey="mois" name="Réservations" color="#f97316" />
+            </ChartCard>
+            <ChartCard title="Évolution des revenus encaissés (6 derniers mois)">
+              <AreaTrend data={revMonthly} dataKey="revenus" xKey="mois" name="Revenus (FCFA)" color="#c2410c" />
+            </ChartCard>
           </div>
 
           <div className="mb-6 grid gap-6 xl:grid-cols-2">

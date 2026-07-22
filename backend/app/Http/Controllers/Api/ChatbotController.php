@@ -125,7 +125,7 @@ class ChatbotController extends Controller
         $validated = $request->validate([
             'question' => 'required|string',
             'reponse' => 'required|string',
-            'categorie' => 'required|in:orientation,reservation,salle,general',
+            'categorie' => 'required|string|max:50', // ⚠ CORRIGÉ : plus d'ENUM, la colonne est passée en VARCHAR
             'mots_cles' => 'nullable|string',
         ]);
 
@@ -139,7 +139,7 @@ class ChatbotController extends Controller
         $validated = $request->validate([
             'question' => 'sometimes|string',
             'reponse' => 'sometimes|string',
-            'categorie' => 'sometimes|in:orientation,reservation,salle,general',
+            'categorie' => 'sometimes|string|max:50', // ⚠ CORRIGÉ : plus d'ENUM, la colonne est passée en VARCHAR
             'mots_cles' => 'nullable|string',
         ]);
 
@@ -208,22 +208,11 @@ class ChatbotController extends Controller
             'date_envoi' => now(),
         ]);
 
-        // ⚠ CORRIGÉ : le chatbot ne répond automatiquement qu'aux clients.
-        // Quand la réception répond, son message est simplement enregistré —
-        // sinon chaque réponse humaine déclenchait une réponse robot.
-        $reponse = null;
-        if ($expediteur === 'client') {
-            $reponse = $this->generateResponse($contenu);
-
-            Message::create([
-                'id_conversation' => $validated['id_conversation'],
-                'expediteur' => 'chatbot',
-                'contenu' => $reponse,
-                'date_envoi' => now(),
-            ]);
-        }
-
-        return response()->json(['reponse' => $reponse, 'message' => 'Message envoyé.']);
+        // ⚠ CORRIGÉ (v3) : plus AUCUNE réponse automatique dans la messagerie
+        // humaine client ↔ réception. Le message client est simplement
+        // enregistré ; c'est la réception qui répond depuis son interface.
+        // Le chatbot public FAQ (/api/chatbot/ask) reste autonome de son côté.
+        return response()->json(['message' => 'Message envoyé.']);
     }
 
     private function generateResponse($message)

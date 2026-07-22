@@ -148,6 +148,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/chart-data', [AdminController::class, 'getChartData']);
         Route::get('/occupancy-data', [AdminController::class, 'getOccupancyData']);
         Route::get('/revenue-data', [AdminController::class, 'getRevenueData']);
+        Route::get('/revenue-monthly', [AdminController::class, 'getRevenueMonthly']); // courbe revenus/mois
         Route::get('/bookings/recent', [AdminController::class, 'getRecentBookings']);
         Route::get('/users/recent', [AdminController::class, 'getRecentUsers']);
 

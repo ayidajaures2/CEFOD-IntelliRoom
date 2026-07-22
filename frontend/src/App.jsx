@@ -12,6 +12,7 @@ import Login from "./pages/public/Login";
 import Register from "./pages/public/Register";
 import Chatbot from "./pages/public/Chatbot";
 import RealTimeDisplay from "./pages/public/RealTimeDisplay";
+import About from "./pages/public/About";
 
 // Client
 import ClientDashboard from "./pages/client/Dashboard";
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/salles" element={<Rooms />} />
         <Route path="/salles/:id" element={<RoomDetail />} />
         <Route path="/chatbot" element={<Chatbot />} />
+        <Route path="/a-propos" element={<About />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
       </Route>

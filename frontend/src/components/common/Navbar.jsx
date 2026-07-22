@@ -4,12 +4,14 @@ import { LuSun, LuMoon, LuMenu, LuX } from "react-icons/lu";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { homePathForRole } from "../../utils/roleHelpers";
+import Logo from "./Logo";
 
 const LINKS = [
   { to: "/", label: "Accueil", end: true },
   { to: "/salles", label: "Salles" },
   { to: "/affichage", label: "Disponibilités" },
   { to: "/chatbot", label: "Assistant" },
+  { to: "/a-propos", label: "À propos" },
 ];
 
 export default function Navbar() {
@@ -31,15 +33,7 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-40 bg-ink text-paper">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
-        <Link to="/" className="flex items-center gap-2.5">
-          <span className="grid h-8 w-8 grid-cols-2 gap-0.5 rounded-md bg-paper/10 p-1" aria-hidden="true">
-            <span className="rounded-sm bg-accent" /><span className="rounded-sm bg-paper" />
-            <span className="rounded-sm bg-paper" /><span className="rounded-sm bg-accent" />
-          </span>
-          <span className="font-display text-lg font-bold tracking-tight">
-            CEFOD <span className="text-accent">IntelliRoom</span>
-          </span>
-        </Link>
+        <Logo variant="full" to="/" />
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Navigation principale">
           {LINKS.map((l) => (
@@ -54,7 +48,7 @@ export default function Navbar() {
             title={isDark ? "Mode clair" : "Mode sombre"}
             className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-paper/70 transition-colors hover:bg-paper/10 hover:text-paper"
           >
-{isDark ? <LuSun className="h-5 w-5" /> : <LuMoon className="h-5 w-5" />}
+            {isDark ? <LuSun className="h-5 w-5" /> : <LuMoon className="h-5 w-5" />}
           </button>
           {isAuthenticated ? (
             <>

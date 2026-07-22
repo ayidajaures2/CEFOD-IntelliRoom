@@ -145,6 +145,40 @@ class AdminController extends Controller
             ->get();
     }
 
+    /**
+     * ✅ AJOUT — Revenus encaissés par mois (6 derniers mois), pour la
+     * courbe évolutive du dashboard admin. Se base sur les paiements
+     * validés : montant + frais.
+     */
+    public function getRevenueMonthly()
+    {
+        $data = Paiement::selectRaw(
+                "DATE_FORMAT(date_paiement, '%Y-%m') as mois_cle, "
+                . "SUM(montant) as somme_montant, SUM(frais) as somme_frais"
+            )
+            ->where('statut', 'valide')
+            ->where('date_paiement', '>=', now()->subMonths(6)->startOfMonth())
+            ->groupBy('mois_cle')
+            ->orderBy('mois_cle')
+            ->get();
+
+        $moisFr = [
+            '01' => 'Jan', '02' => 'Fév', '03' => 'Mar', '04' => 'Avr',
+            '05' => 'Mai', '06' => 'Jun', '07' => 'Jul', '08' => 'Aoû',
+            '09' => 'Sep', '10' => 'Oct', '11' => 'Nov', '12' => 'Déc',
+        ];
+
+        return response()->json(
+            $data->map(function ($row) use ($moisFr) {
+                [$annee, $mois] = explode('-', $row->mois_cle);
+                return [
+                    'mois' => $moisFr[$mois] . ' ' . substr($annee, 2),
+                    'revenus' => (float) ($row->somme_montant + $row->somme_frais),
+                ];
+            })->values()
+        );
+    }
+
     public function getRecentBookings()
     {
         return response()->json($this->recentBookings(10));

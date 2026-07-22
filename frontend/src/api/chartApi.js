@@ -5,6 +5,7 @@ import { ENDPOINTS } from "./endpoints";
 export const fetchAdminChart = () => api.get(ENDPOINTS.charts.adminChart);
 export const fetchAdminOccupancy = () => api.get(ENDPOINTS.charts.adminOccupancy);
 export const fetchAdminRevenue = () => api.get(ENDPOINTS.charts.adminRevenue);
+export const fetchAdminRevenueMonthly = () => api.get(ENDPOINTS.charts.adminRevenueMonthly); // ✅ AJOUT — revenus/mois
 // Réception
 export const fetchReceptionChart = () => api.get(ENDPOINTS.charts.receptionChart);
 export const fetchReceptionOccupancy = () => api.get(ENDPOINTS.charts.receptionOccupancy);

@@ -99,6 +99,7 @@ export const ENDPOINTS = {
     adminChart: "/admin/chart-data",
     adminOccupancy: "/admin/occupancy-data",
     adminRevenue: "/admin/revenue-data",
+    adminRevenueMonthly: "/admin/revenue-monthly", // ✅ AJOUT — courbe revenus/mois
     receptionChart: "/receptionist/chart-data",
     receptionOccupancy: "/receptionist/occupancy-chart",
     cashierByMode: "/cashier/chart-by-mode",
@@ -115,6 +116,8 @@ export const ENDPOINTS = {
     revenue: "/admin/revenue-data",
     recentBookings: "/admin/bookings/recent",
     settings: "/admin/settings",
+    notifications: "/admin/notifications",
+    notificationsBroadcast: "/admin/notifications/broadcast",
     faq: "/admin/faq",
     faqItem: (id) => `/admin/faq/${id}`,
   },

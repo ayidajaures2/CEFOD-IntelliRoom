@@ -6,6 +6,7 @@ import { fetchNotifications, markAllNotificationsRead, markNotificationRead } fr
 import { ROLES, ROLE_LABELS } from "../utils/constants";
 import { formatDateTime } from "../utils/formatDate";
 import Avatar from "../components/common/Avatar";
+import Logo from "../components/common/Logo";
 import { LuMenu, LuBell, LuLogOut } from "react-icons/lu";
 import ThemeToggle from "../components/common/ThemeToggle";
 
@@ -93,13 +94,9 @@ export default function DashboardLayout() {
         }`}
         aria-label="Menu de l'espace"
       >
-        <Link to="/" className="mb-6 flex items-center gap-2.5 px-1">
-          <span className="grid h-8 w-8 grid-cols-2 gap-0.5 rounded-md bg-paper/10 p-1" aria-hidden="true">
-            <span className="rounded-sm bg-accent" /><span className="rounded-sm bg-paper" />
-            <span className="rounded-sm bg-paper" /><span className="rounded-sm bg-accent" />
-          </span>
-          <span className="font-display font-bold">CEFOD <span className="text-accent">IntelliRoom</span></span>
-        </Link>
+        <div className="mb-6 px-1">
+          <Logo variant="full" to="/" />
+        </div>
 
         <nav className="flex flex-1 flex-col gap-1">
           {links.map((l) => (
