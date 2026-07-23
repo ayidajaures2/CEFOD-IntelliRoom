@@ -14,7 +14,7 @@ export default function Home() {
   const load = useCallback(async () => {
     try {
       const { data } = await fetchOccupation();
-      setRooms((Array.isArray(data) ? data : data.data ?? []).slice(0, 6));
+      setRooms(Array.isArray(data) ? data : data.data ?? []);
     } catch { /* le hero reste utilisable sans API */ }
   }, []);
   usePolling(load);
