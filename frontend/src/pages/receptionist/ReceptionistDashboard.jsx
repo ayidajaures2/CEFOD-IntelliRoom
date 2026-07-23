@@ -55,7 +55,7 @@ export default function ReceptionistDashboard() {
           <Link to="/reception/reservations" className="text-sm font-medium text-accent hover:text-accent-dark">Tout voir</Link>
         </div>
         {pending.length === 0 ? (
-          <p className="py-6 text-center text-sm text-ink/45">Aucune demande à traiter. 👍</p>
+          <p className="py-6 text-center text-sm text-ink/45">Aucune demande à traiter.</p>
         ) : (
           <ul className="divide-y divide-ink/5">
             {pending.slice(0, 6).map((b) => (

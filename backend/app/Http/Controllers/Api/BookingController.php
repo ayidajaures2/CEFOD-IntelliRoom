@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Reservation;
 use App\Models\Notification;
 use App\Models\Utilisateur;
+use App\Support\BusinessHours; // ✅ AJOUT
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -36,6 +37,8 @@ class BookingController extends Controller
      * id_client — une réservation créée par la réceptionniste lui était
      * attribuée À ELLE. Le personnel peut désormais passer un id_client ;
      * un client, lui, ne peut réserver que pour lui-même.
+     *
+     * ✅ AJOUT v8 : validation des créneaux via BusinessHours.
      */
     public function store(Request $request)
     {
@@ -49,6 +52,18 @@ class BookingController extends Controller
             'motif' => 'nullable|string|max:255',
             'id_client' => ($isStaff ? 'sometimes' : 'prohibited') . '|exists:utilisateur,id_utilisateur',
         ]);
+
+        // ✅ AJOUT : vérifier que le créneau respecte les horaires ouvrés
+        $start = \Carbon\Carbon::parse($validated['date_debut']);
+        $end   = \Carbon\Carbon::parse($validated['date_fin']);
+
+        $slotErrors = BusinessHours::validateSlot($start, $end);
+        if ($slotErrors) {
+            return response()->json([
+                'message' => 'Le créneau demandé ne respecte pas les horaires d\'ouverture du CEFOD (' . BusinessHours::humanSchedule() . ').',
+                'errors' => $slotErrors,
+            ], 422);
+        }
 
         $idClient = $isStaff && isset($validated['id_client'])
             ? $validated['id_client']
@@ -128,6 +143,9 @@ class BookingController extends Controller
         return response()->json($reservation);
     }
 
+    /**
+     * ✅ AJOUT v8 : validation des créneaux via BusinessHours sur update aussi.
+     */
     public function update(Request $request, $id)
     {
         $reservation = Reservation::find($id);
@@ -160,6 +178,24 @@ class BookingController extends Controller
             // ⚠ 'terminee' retiré : ce statut n'est jamais stocké (calculé).
             'statut' => ($user->role === 'client' ? 'prohibited' : 'sometimes') . '|in:en_attente,validee,confirmee,annulee',
         ]);
+
+        // ✅ AJOUT : si les dates changent, revalider les horaires ouvrés
+        $newStart = isset($validated['date_debut'])
+            ? \Carbon\Carbon::parse($validated['date_debut'])
+            : $reservation->date_debut;
+        $newEnd = isset($validated['date_fin'])
+            ? \Carbon\Carbon::parse($validated['date_fin'])
+            : $reservation->date_fin;
+
+        if (isset($validated['date_debut']) || isset($validated['date_fin'])) {
+            $slotErrors = BusinessHours::validateSlot($newStart, $newEnd);
+            if ($slotErrors) {
+                return response()->json([
+                    'message' => 'Le créneau modifié ne respecte pas les horaires d\'ouverture du CEFOD (' . BusinessHours::humanSchedule() . ').',
+                    'errors' => $slotErrors,
+                ], 422);
+            }
+        }
 
         $reservation->update($validated);
 

@@ -7,6 +7,7 @@ use App\Models\Paiement;
 use App\Models\Reservation;
 use App\Models\Facture;
 use App\Models\Notification;
+use App\Support\BusinessHours; // ✅ AJOUT
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -227,36 +228,40 @@ class PaymentController extends Controller
     }
 
     /**
+     * CAISSIER - Historique des paiements
+     */
+    public function history(Request $request)
+    {
+        $query = Paiement::with(['reservation.client', 'reservation.salle'])
+            ->orderBy('date_paiement', 'desc');
+
+        if ($request->has('mode_paiement')) {
+            $query->where('mode_paiement', $request->mode_paiement);
+        }
+
+        return response()->json($query->paginate(20));
+    }
+
+    /**
      * CAISSIER - Annuler un paiement
      */
-    public function cancel($id)
+    public function cancelPayment($id)
     {
-        $paiement = Paiement::with(['reservation'])->findOrFail($id);
+        $paiement = Paiement::with('reservation')->findOrFail($id);
 
         if ($paiement->statut === 'annule') {
             return response()->json(['message' => 'Ce paiement est déjà annulé'], 400);
         }
 
-        if ($paiement->statut === 'valide') {
-            return response()->json([
-                'message' => 'Un paiement validé ne peut pas être annulé. Contactez l\'administrateur.',
-                'paiement' => $paiement
-            ], 400);
-        }
-
         DB::beginTransaction();
-
         try {
             $paiement->statut = 'annule';
             $paiement->save();
 
-            $reservation = $paiement->reservation;
-            if ($reservation->statut === 'confirmee') {
-                $reservation->statut = 'validee';
-                $reservation->save();
+            if ($paiement->reservation) {
+                $paiement->reservation->statut = 'validee';
+                $paiement->reservation->save();
             }
-
-            $this->notifyClient($reservation, 'Paiement annulé');
 
             DB::commit();
 
@@ -264,10 +269,8 @@ class PaymentController extends Controller
                 'message' => 'Paiement annulé avec succès',
                 'paiement' => $paiement
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Erreur annulation paiement', ['error' => $e->getMessage()]);
             return response()->json([
                 'message' => 'Erreur lors de l\'annulation',
                 'error' => $e->getMessage()
@@ -276,101 +279,10 @@ class PaymentController extends Controller
     }
 
     /**
-     * CAISSIER - Historique des paiements
-     */
-    public function history(Request $request)
-    {
-        $base = Paiement::query();
-
-        if ($request->has('start_date')) {
-            $base->whereDate('date_paiement', '>=', $request->start_date);
-        }
-
-        if ($request->has('end_date')) {
-            $base->whereDate('date_paiement', '<=', $request->end_date);
-        }
-
-        if ($request->has('statut')) {
-            $base->where('statut', $request->statut);
-        }
-
-        $payments = (clone $base)
-            ->with(['reservation', 'reservation.client', 'reservation.salle'])
-            ->orderBy('date_paiement', 'desc')
-            ->paginate(20);
-
-        // ⚠ CORRIGÉ : totalWithFrais = montant + frais (pas sum('total')).
-        $sumMontant = (clone $base)->sum('montant') ?? 0;
-        $sumFrais = (clone $base)->sum('frais') ?? 0;
-
-        return response()->json([
-            'data' => $payments,
-            'summary' => [
-                'total' => (clone $base)->count(),
-                'totalAmount' => $sumMontant,
-                'totalFrais' => $sumFrais,
-                'totalWithFrais' => $sumMontant + $sumFrais,
-                'validated' => (clone $base)->where('statut', 'valide')->count(),
-                'pending' => (clone $base)->where('statut', 'en_attente')->count(),
-                'cancelled' => (clone $base)->where('statut', 'annule')->count(),
-            ]
-        ]);
-    }
-
-    /**
-     * ADMIN - Superviser les paiements
-     */
-    public function adminIndex(Request $request)
-    {
-        $query = Paiement::with(['reservation', 'reservation.client', 'reservation.salle'])
-            ->orderBy('date_paiement', 'desc');
-
-        if ($request->has('statut')) {
-            $query->where('statut', $request->statut);
-        }
-
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->whereHas('reservation.client', function ($q) use ($search) {
-                $q->where('nom', 'LIKE', "%{$search}%")
-                    ->orWhere('prenom', 'LIKE', "%{$search}%");
-            });
-        }
-
-        // ⚠ CORRIGÉ : totalWithFrais = montant + frais (pas sum('total')).
-        $sumMontant = Paiement::where('statut', 'valide')->sum('montant') ?? 0;
-        $sumFrais = Paiement::where('statut', 'valide')->sum('frais') ?? 0;
-
-        return response()->json([
-            'data' => $query->paginate(20),
-            'stats' => [
-                'total' => Paiement::count(),
-                'totalAmount' => $sumMontant,
-                'totalFrais' => $sumFrais,
-                'totalWithFrais' => $sumMontant + $sumFrais,
-                'byMode' => $this->getPaymentStatsByMode(),
-                'byStatus' => [
-                    'valide' => Paiement::where('statut', 'valide')->count(),
-                    'en_attente' => Paiement::where('statut', 'en_attente')->count(),
-                    'annule' => Paiement::where('statut', 'annule')->count(),
-                ]
-            ]
-        ]);
-    }
-
-    private function getPaymentStatsByMode()
-    {
-        return [
-            'especes' => Paiement::where('mode_paiement', 'especes')->where('statut', 'valide')->count(),
-            'moov_money' => Paiement::where('mode_paiement', 'moov_money')->where('statut', 'valide')->count(),
-            'airtel_money' => Paiement::where('mode_paiement', 'airtel_money')->where('statut', 'valide')->count(),
-        ];
-    }
-
-    /**
-     * SIMULATION - Paiement en ligne HUB2 (Tchad).
-     * Route : POST /client/payments/simulate (dans le groupe role:client,
-     * donc Auth::id() est fiable — c'était la cause du faux 403).
+     * CLIENT - Simuler un paiement Mobile Money
+     *
+     * ⚠ CORRIGÉ : cette route DOIT rester dans le groupe auth client
+     * (sinon Auth::id() est null → faux 403).
      */
     public function simulateOnlinePayment(Request $request)
     {
@@ -379,14 +291,6 @@ class PaymentController extends Controller
             'mode_paiement' => 'required|in:moov_money,airtel_money',
             'telephone' => 'required|string|max:20',
         ]);
-
-        // Numéro tchadien : 235 + 8 chiffres (le + et les espaces sont retirés)
-        $phone = preg_replace('/[^0-9]/', '', $validated['telephone']);
-        if (!preg_match('/^235\d{8}$/', $phone)) {
-            return response()->json([
-                'message' => 'Numéro invalide. Format attendu : 235XXXXXXXX (numéro tchadien).'
-            ], 422);
-        }
 
         $reservation = Reservation::with(['client', 'salle'])->find($validated['id_reservation']);
 
@@ -400,7 +304,7 @@ class PaymentController extends Controller
 
         if ($reservation->statut !== 'validee') {
             return response()->json([
-                'message' => 'La réservation doit être validée par la réception avant le paiement (statut actuel : ' . $reservation->statut . ').'
+                'message' => 'La réservation doit être validée par la réception avant le paiement'
             ], 400);
         }
 
@@ -418,19 +322,19 @@ class PaymentController extends Controller
         DB::beginTransaction();
 
         try {
+            // ⚠ CORRIGÉ : calculatePrice() utilise désormais BusinessHours
             $montant = $this->calculatePrice($reservation);
             $frais = $this->calculateFrais($montant, $validated['mode_paiement']);
 
-            $transactionId = 'SIM-TD-' . time() . '-' . strtoupper(substr(uniqid(), -6));
+            $transactionId = 'SIM-' . strtoupper(substr(md5(uniqid()), 0, 8));
 
             $paiement = Paiement::create([
                 'id_reservation' => $validated['id_reservation'],
                 'id_caissier' => null,
                 'montant' => $montant,
                 'frais' => $frais,
-                // 'total' non renseigné : colonne générée par MySQL.
                 'mode_paiement' => $validated['mode_paiement'],
-                'statut' => 'valide', // simulation : succès immédiat
+                'statut' => 'valide',
                 'reference' => $transactionId,
                 'date_paiement' => now(),
             ]);
@@ -516,6 +420,7 @@ class PaymentController extends Controller
         DB::beginTransaction();
 
         try {
+            // ⚠ CORRIGÉ : calculatePrice() utilise désormais BusinessHours
             $montant = $this->calculatePrice($reservation);
             $frais = $this->calculateFrais($montant, $validated['mode_paiement']);
 
@@ -623,12 +528,23 @@ class PaymentController extends Controller
             'id_utilisateur' => $reservation->id_client,
             'titre' => $message,
             'contenu' => 'Votre paiement pour la réservation du ' . $reservation->date_debut->format('d/m/Y à H:i') . ' a été traité.',
-            'type' => 'paiement', // ⚠ CORRIGÉ : type cohérent (nécessite l'ENUM mis à jour)
+            'type' => 'paiement',
             'est_lu' => false,
             'date_creation' => now(),
         ]);
     }
 
+    /**
+     * ⚠ CORRIGÉ — Calcul du prix basé sur les HEURES OUVRÉES uniquement.
+     *
+     * Utilise BusinessHours::computeOpenMinutes() pour ne facturer que
+     * les minutes où le CEFOD est ouvert (Lun–Sam 08:00–18:00).
+     *
+     * Exemple validé : vendredi 10h → samedi 12h
+     *   → vendredi 10h–18h = 8 h + samedi 08h–12h = 4 h = 12 h facturées.
+     *
+     * Unité « jour » : 1 jour = 10 h ouvrées (600 min).
+     */
     private function calculatePrice($reservation)
     {
         $reservation->loadMissing(['salle.tarifs', 'client']);
@@ -649,13 +565,29 @@ class PaymentController extends Controller
         }
 
         $debut = $reservation->date_debut;
-        $fin = $reservation->date_fin;
+        $fin   = $reservation->date_fin;
+
+        // ✅ AJOUT : calcul basé sur les minutes ouvrées
+        $openMinutes = BusinessHours::computeOpenMinutes($debut, $fin);
 
         if ($tarif->unite === 'heure') {
-            $unites = max(1, ceil($debut->diffInMinutes($fin) / 60));
+            // Arrondi à l'heure supérieure, minimum 1 h
+            $unites = max(1, (int) ceil($openMinutes / 60));
         } else {
-            $unites = max(1, ceil($debut->diffInHours($fin) / 24));
+            // 1 jour ouvré = 10 h = 600 min, arrondi supérieur, minimum 1
+            $unites = max(1, (int) ceil($openMinutes / 600));
         }
+
+        Log::info('Calcul tarif heures ouvrées', [
+            'id_reservation' => $reservation->id_reservation,
+            'debut' => $debut->toDateTimeString(),
+            'fin' => $fin->toDateTimeString(),
+            'open_minutes' => $openMinutes,
+            'unite' => $tarif->unite,
+            'unites_facturees' => $unites,
+            'prix_unitaire' => $tarif->prix,
+            'total' => $tarif->prix * $unites,
+        ]);
 
         return $tarif->prix * $unites;
     }

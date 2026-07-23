@@ -12,7 +12,7 @@ import StatutBadge from "../../components/common/StatutBadge";
 import Modal from "../../components/common/Modal";
 import { formatDateTime } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
-import { MODES_PAIEMENT, OPERATOR_FEES } from "../../utils/constants";
+import { MODES_PAIEMENT, OPERATOR_FEES, computeOpenMinutes } from "../../utils/constants"; // ⚠ CORRIGÉ : ajout computeOpenMinutes
 import { apiErrorMessage } from "../../utils/apiError";
 import { extractList } from "../../utils/extract";
 
@@ -63,7 +63,10 @@ export default function MyBookings() {
     }
   };
 
-  /** Même barème que PaymentController::calculatePrice côté serveur. */
+  /**
+   * ⚠ CORRIGÉ — Même barème que PaymentController::calculatePrice côté serveur.
+   * Utilise désormais computeOpenMinutes() pour ne facturer que les heures ouvrées.
+   */
   const computePrice = (bk) => {
     if (bk.paiement?.montant != null) return Number(bk.paiement.montant);
     const tarifs = bk.salle?.tarifs ?? [];
@@ -72,8 +75,13 @@ export default function MyBookings() {
     if (!tarif) return null;
     const debut = new Date(bk.date_debut);
     const fin = new Date(bk.date_fin);
-    const heures = Math.max(1, Math.ceil((fin - debut) / 3_600_000));
-    const unites = tarif.unite === "heure" ? heures : Math.max(1, Math.ceil(heures / 24));
+
+    // ⚠ CORRIGÉ : calcul basé sur les minutes ouvrées uniquement
+    const openMin = computeOpenMinutes(debut, fin);
+    const unites = tarif.unite === "heure"
+      ? Math.max(1, Math.ceil(openMin / 60))
+      : Math.max(1, Math.ceil(openMin / 600)); // 1 jour ouvré = 10 h = 600 min
+
     return Number(tarif.prix) * unites;
   };
 

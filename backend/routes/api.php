@@ -131,6 +131,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/payments/{id}/cancel', [PaymentController::class, 'cancel']);
 
         Route::post('/invoices', [InvoiceController::class, 'generateManually']);
+        // ✅ AJOUT : le caissier peut voir et télécharger les factures
+        Route::get('/invoices', [InvoiceController::class, 'receptionistInvoices']);
+        Route::get('/invoices/{id}/download', [InvoiceController::class, 'download']);
 
         Route::get('/bookings', [BookingController::class, 'cashierBookings']);
         Route::get('/bookings/{id}', [BookingController::class, 'show']);

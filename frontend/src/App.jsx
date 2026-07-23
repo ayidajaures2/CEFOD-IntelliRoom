@@ -33,6 +33,7 @@ import ReceptionistInvoices from "./pages/receptionist/Invoices";
 // Caissier
 import CashierDashboard from "./pages/cashier/CashierDashboard";
 import CashierPayments from "./pages/cashier/Invoices";
+import CashierInvoices from "./pages/cashier/CashierInvoices"; // ✅ AJOUT
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -88,6 +89,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/caisse" element={<CashierDashboard />} />
           <Route path="/caisse/paiements" element={<CashierPayments />} />
+          <Route path="/caisse/factures" element={<CashierInvoices />} />
           <Route path="/caisse/profil" element={<Profile />} />
         </Route>
       </Route>

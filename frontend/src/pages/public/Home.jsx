@@ -5,8 +5,10 @@ import { fetchOccupation } from "../../api/roomApi";
 import { STATUT_SALLE_LABELS } from "../../utils/constants";
 
 /**
- * Accueil public. Signature de la page : le "tableau des salles" vivant,
- * alimenté par le même polling 5 s que l'écran d'affichage.
+ * Accueil public.
+ * ▸ Colonne GAUCHE : identité CEFOD (logo mis en avant + baseline).
+ * ▸ Colonne DROITE : tableau des salles en temps réel (polling 5 s),
+ *   argument central du mémoire.
  */
 export default function Home() {
   const [rooms, setRooms] = useState([]);
@@ -27,39 +29,62 @@ export default function Home() {
 
   return (
     <>
-      {/* Héros */}
-      <section className="bg-ink text-paper">
+      {/* ==================== Héros ==================== */}
+      <section className="bg-surface text-ink">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-2 lg:items-center lg:py-24">
+
+          {/* Colonne GAUCHE : logo + identité + boutons */}
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-accent">CEFOD · N'Djaména</p>
+            <div className="mb-6 flex items-center gap-4">
+              <div className="relative">
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 -m-4 rounded-full bg-accent/15 blur-2xl"
+                />
+                <img
+                  src="/cefod-logo.jpeg"
+                  alt="Logo du CEFOD"
+                  className="relative h-24 w-24 rounded-2xl shadow-2xl sm:h-28 sm:w-28"
+                />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-accent">
+                  CEFOD · N'Djaména
+                </p>
+                <p className="mt-1 text-sm text-ink/60">
+                  Centre d'Étude et de Formation<br />pour le Développement
+                </p>
+              </div>
+            </div>
+
             <h1 className="font-display text-4xl font-black leading-tight sm:text-5xl">
               La bonne salle,
               <br />au bon moment,
               <br /><span className="text-accent">sans conflit.</span>
             </h1>
-            <p className="mt-5 max-w-md text-paper/70">
+            <p className="mt-5 max-w-md text-ink/70">
               Consultez les disponibilités en temps réel, réservez en ligne et suivez
               vos demandes jusqu'au paiement — fini les cahiers et les doubles réservations.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link to="/salles" className="btn-primary px-6 py-3">Voir les salles</Link>
-              <Link to="/chatbot" className="btn-outline border-paper/25 bg-transparent px-6 py-3 text-paper hover:border-accent hover:text-accent">
+              <Link to="/chatbot" className="btn-outline px-6 py-3">
                 Demander à l'assistant
               </Link>
             </div>
           </div>
 
-          {/* Tableau vivant */}
-          <div className="card border-paper/10 bg-paper/5 p-5 backdrop-blur">
+          {/* Colonne DROITE : tableau vivant */}
+          <div className="card border-ink/10 bg-ink/5 p-5 backdrop-blur">
             <div className="mb-4 flex items-center justify-between">
-              <p className="font-display text-sm font-bold uppercase tracking-wider text-paper/80">État des salles</p>
-              <span className="flex items-center gap-2 text-xs text-paper/60">
+              <p className="font-display text-sm font-bold uppercase tracking-wider text-ink/80">État des salles</p>
+              <span className="flex items-center gap-2 text-xs text-ink/60">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden="true" />
                 en direct
               </span>
             </div>
             {rooms.length === 0 ? (
-              <p className="py-10 text-center text-sm text-paper/45">
+              <p className="py-10 text-center text-sm text-ink/45">
                 Connexion à l'affichage temps réel…
               </p>
             ) : (
@@ -82,7 +107,7 @@ export default function Home() {
                 })}
               </ul>
             )}
-            <div className="mt-4 flex gap-4 text-xs text-paper/60">
+            <div className="mt-4 flex gap-4 text-xs text-ink/60">
               <span>{counts.libre ?? 0} libre(s)</span>
               <span>{counts.reservee ?? 0} réservée(s)</span>
               <span>{counts.occupee ?? 0} occupée(s)</span>
@@ -91,7 +116,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Comment ça marche */}
+      {/* ==================== Comment ça marche ==================== */}
       <section className="mx-auto max-w-6xl px-4 py-16">
         <h2 className="font-display text-2xl font-bold sm:text-3xl">Comment réserver ?</h2>
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -110,7 +135,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Bandeau affichage */}
+      {/* ==================== Bandeau affichage ==================== */}
       <section className="border-y border-ink/10 bg-accent-soft">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8">
           <div>
