@@ -50,7 +50,7 @@ export default function MyBookings() {
       setLoading(false);
     }
   }, [toastError]);
-  usePolling(load, 10000); // statuts mis à jour automatiquement (validation, paiement…)
+  usePolling(load, 20000); // statuts mis à jour automatiquement (validation, paiement…)
 
   const handleCancel = async (b) => {
     if (!window.confirm(`Annuler la réservation de « ${b.salle?.nom_salle ?? "cette salle"} » ?`)) return;

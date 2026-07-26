@@ -18,8 +18,14 @@ class Reservation extends Model
         'date_debut',
         'date_fin',
         'motif',
-        'statut'
+        'statut',
+        'note_interne', // AJOUT
     ];
+
+    // AJOUT : note_interne masquée par défaut (réservée réception/admin).
+    // Elle est explicitement révélée avec ->makeVisible('note_interne')
+    // dans les endpoints réceptionniste/admin du BookingController.
+    protected $hidden = ['note_interne'];
 
     protected $casts = [
         'date_creation' => 'datetime',

@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Reservation;
 use App\Models\Notification;
 use App\Models\Utilisateur;
-use App\Support\BusinessHours; // ✅ AJOUT
+use App\Support\BusinessHours;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -22,24 +22,12 @@ class BookingController extends Controller
         $user = Auth::user();
         return response()->json(
             Reservation::where('id_client', $user->id_utilisateur)
-                // ⚠ AJOUT : salle.tarifs pour que le client voie le prix
-                // final AVANT de payer (modal de paiement du frontend).
                 ->with(['salle.tarifs', 'paiement'])
                 ->orderBy('date_creation', 'desc')
                 ->get()
         );
     }
 
-    /**
-     * ⚠ CORRIGÉ : cette méthode est aussi montée sur
-     * POST /receptionist/bookings ("créer une réservation au nom d'un
-     * client"), mais elle utilisait systématiquement Auth::id() comme
-     * id_client — une réservation créée par la réceptionniste lui était
-     * attribuée À ELLE. Le personnel peut désormais passer un id_client ;
-     * un client, lui, ne peut réserver que pour lui-même.
-     *
-     * ✅ AJOUT v8 : validation des créneaux via BusinessHours.
-     */
     public function store(Request $request)
     {
         $user = Auth::user();
@@ -53,7 +41,6 @@ class BookingController extends Controller
             'id_client' => ($isStaff ? 'sometimes' : 'prohibited') . '|exists:utilisateur,id_utilisateur',
         ]);
 
-        // ✅ AJOUT : vérifier que le créneau respecte les horaires ouvrés
         $start = \Carbon\Carbon::parse($validated['date_debut']);
         $end   = \Carbon\Carbon::parse($validated['date_fin']);
 
@@ -99,8 +86,6 @@ class BookingController extends Controller
         ]);
         $reservation->load('salle');
 
-        // ⚠ AJOUT : la réception est prévenue de chaque nouvelle demande —
-        // c'est ce qui rend la cloche « vivante » côté personnel.
         $receptionnistes = Utilisateur::where('role', 'receptionniste')->pluck('id_utilisateur');
         if ($receptionnistes->isNotEmpty()) {
             $now = now();
@@ -134,17 +119,22 @@ class BookingController extends Controller
             ], 404);
         }
 
-        // ⚠ AJOUT sécurité : un client ne peut consulter que SES réservations.
         $user = Auth::user();
         if ($user->role === 'client' && $reservation->id_client !== $user->id_utilisateur) {
             return response()->json(['message' => 'Accès non autorisé'], 403);
+        }
+
+        // AJOUT : note_interne visible uniquement pour réception/admin.
+        if (in_array($user->role, ['receptionniste', 'admin'], true)) {
+            $reservation->makeVisible('note_interne');
         }
 
         return response()->json($reservation);
     }
 
     /**
-     * ✅ AJOUT v8 : validation des créneaux via BusinessHours sur update aussi.
+     * AJOUT v8 : validation des créneaux via BusinessHours sur update aussi.
+     * AJOUT : prise en charge de note_interne (staff uniquement).
      */
     public function update(Request $request, $id)
     {
@@ -156,8 +146,6 @@ class BookingController extends Controller
             ], 404);
         }
 
-        // ⚠ AJOUT sécurité : un client ne modifie que SES réservations,
-        // et uniquement tant qu'elles sont en attente.
         $user = Auth::user();
         if ($user->role === 'client') {
             if ($reservation->id_client !== $user->id_utilisateur) {
@@ -175,11 +163,11 @@ class BookingController extends Controller
             'date_debut' => 'sometimes|date',
             'date_fin' => 'sometimes|date|after:date_debut',
             'motif' => 'nullable|string|max:255',
-            // ⚠ 'terminee' retiré : ce statut n'est jamais stocké (calculé).
             'statut' => ($user->role === 'client' ? 'prohibited' : 'sometimes') . '|in:en_attente,validee,confirmee,annulee',
+            // AJOUT : note interne réservée à la réception/admin.
+            'note_interne' => ($user->role === 'client' ? 'prohibited' : 'sometimes') . '|nullable|string|max:1000',
         ]);
 
-        // ✅ AJOUT : si les dates changent, revalider les horaires ouvrés
         $newStart = isset($validated['date_debut'])
             ? \Carbon\Carbon::parse($validated['date_debut'])
             : $reservation->date_debut;
@@ -198,8 +186,15 @@ class BookingController extends Controller
         }
 
         $reservation->update($validated);
+        $reservation->load('salle');
 
-        return response()->json($reservation->load('salle'));
+        // AJOUT : renvoyer note_interne dans la réponse pour le staff
+        // (sinon le frontend ne peut pas afficher la note qu'il vient de saisir).
+        if (in_array($user->role, ['receptionniste', 'admin'], true)) {
+            $reservation->makeVisible('note_interne');
+        }
+
+        return response()->json($reservation);
     }
 
     public function cancel($id)
@@ -212,7 +207,6 @@ class BookingController extends Controller
             ], 404);
         }
 
-        // ⚠ AJOUT sécurité : un client n'annule que SES réservations.
         $user = Auth::user();
         if ($user->role === 'client' && $reservation->id_client !== $user->id_utilisateur) {
             return response()->json(['message' => 'Accès non autorisé'], 403);
@@ -242,7 +236,6 @@ class BookingController extends Controller
 
     public function markNotificationAsRead($id)
     {
-        // ⚠ AJOUT sécurité : on ne marque que SES propres notifications.
         $notification = Notification::where('id_utilisateur', Auth::id())->find($id);
 
         if (!$notification) {
@@ -268,7 +261,11 @@ class BookingController extends Controller
             $query->where('statut', $request->statut);
         }
 
-        return response()->json($query->paginate(20));
+        $result = $query->paginate(20);
+        // AJOUT : note_interne visible pour la réception.
+        $result->getCollection()->makeVisible('note_interne');
+
+        return response()->json($result);
     }
 
     public function validateBooking($id)
@@ -352,7 +349,11 @@ class BookingController extends Controller
             });
         }
 
-        return response()->json($query->paginate(20));
+        $result = $query->paginate(20);
+        // AJOUT : note_interne visible pour l'admin (AdminDashboard, Option A).
+        $result->getCollection()->makeVisible('note_interne');
+
+        return response()->json($result);
     }
 
     public function adminCancel($id)

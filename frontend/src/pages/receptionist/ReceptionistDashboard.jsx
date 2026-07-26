@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { fetchAllBookings } from "../../api/bookingApi";
 import { fetchOccupation } from "../../api/roomApi";
@@ -7,7 +7,7 @@ import PageHeader from "../../components/common/PageHeader";
 import StatutBadge from "../../components/common/StatutBadge";
 import { formatDateTime } from "../../utils/formatDate";
 import { fetchReceptionChart, fetchReceptionOccupancy } from "../../api/chartApi";
-import { StackedBars, DonutChart, ChartCard } from "../../components/common/Charts";
+import { StackedBars, DonutChart, BarsChart, ChartCard } from "../../components/common/Charts";
 import StatCard from "../../components/common/StatCard";
 import { LuHourglass, LuCircleCheck, LuBuilding2 } from "react-icons/lu";
 
@@ -22,7 +22,7 @@ export default function ReceptionistDashboard() {
       setRooms(Array.isArray(r.data) ? r.data : r.data.data ?? []);
     } catch { /* réessayé au prochain tick */ }
   }, []);
-  usePolling(load, 10000);
+  usePolling(load, 20000);
 
   const [chart, setChart] = useState([]);
   const [occ, setOcc] = useState([]);
@@ -34,6 +34,20 @@ export default function ReceptionistDashboard() {
   const pending = bookings.filter((b) => b.statut === "en_attente");
   const occupied = rooms.filter((r) => (r.statut_effectif ?? r.statut) === "occupee").length;
   const free = rooms.filter((r) => (r.statut_effectif ?? r.statut) === "libre").length;
+
+  // AJOUT : répartition du nombre de réservations par salle, calculée sur
+  // les réservations chargées (même page que "Demandes en attente" plus haut,
+  // donc même limite de pagination — pas un total historique exact).
+  const bookingsBySalle = useMemo(() => {
+    const counts = new Map();
+    bookings.forEach((b) => {
+      const nom = b.salle?.nom_salle ?? `Salle #${b.id_salle}`;
+      counts.set(nom, (counts.get(nom) ?? 0) + 1);
+    });
+    return Array.from(counts, ([salle, reservations]) => ({ salle, reservations }))
+      .sort((a, b) => b.reservations - a.reservations)
+      .slice(0, 8);
+  }, [bookings]);
 
   return (
     <>
@@ -88,6 +102,19 @@ export default function ReceptionistDashboard() {
         <ChartCard title="Occupation actuelle des salles">
           <DonutChart data={occ} />
         </ChartCard>
+        {/* AJOUT : réservations par salle */}
+        <div className="xl:col-span-2">
+          <ChartCard title="Réservations par salle">
+            <BarsChart
+              data={bookingsBySalle}
+              dataKey="reservations"
+              xKey="salle"
+              name="Réservations"
+              maxBarSize={48}
+              barCategoryGap="35%"
+            />
+          </ChartCard>
+        </div>
       </div>
     </>
   );

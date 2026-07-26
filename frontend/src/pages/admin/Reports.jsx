@@ -10,7 +10,11 @@ import Loader from "../../components/common/Loader";
 import { STATUT_RESERVATION_LABELS } from "../../utils/constants";
 
 /* Palette imposée : dégradés de l'encre et de l'orange uniquement. */
-const COLORS = ["#f97316", "#0d0d0d", "#c2410c", "#fdba74", "#525252"];
+// AJOUT : le noir suit désormais le thème via var(--color-ink) — sinon il
+// reste noir pur en dark mode et devient quasi invisible sur le fond sombre.
+const COLORS = ["#f97316", "var(--color-ink)", "#c2410c", "#fdba74", "#525252"];
+// AJOUT : même logique pour le liseré de grille (invisible en dark mode avant).
+const GRID_STROKE = "color-mix(in srgb, var(--color-ink) 7%, transparent)";
 
 export default function Reports() {
   const [stats, setStats] = useState(null);
@@ -86,7 +90,7 @@ export default function Reports() {
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={byRoom}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#0d0d0d15" />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                 <Tooltip />

@@ -7,6 +7,7 @@ import EmptyState from "../../components/common/EmptyState";
 import Modal from "../../components/common/Modal";
 import { CATEGORIES_CLIENT, CATEGORIE_CLIENT_LABELS, ROLES, ROLE_LABELS } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
+import { LuRefreshCw } from "react-icons/lu";
 
 const EMPTY = {
   nom: "", prenom: "", email: "", telephone: "",
@@ -22,21 +23,25 @@ export default function ManageUsers() {
   const { success, error: toastError } = useNotify();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  // AJOUT : distingue le chargement plein écran du refresh manuel (bouton)
+  const [refreshing, setRefreshing] = useState(false);
   const [roleFilter, setRoleFilter] = useState("");
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (silent) setRefreshing(true);
+    else setLoading(true);
     try {
       const { data } = await fetchUsers();
       setUsers(Array.isArray(data) ? data : data.data ?? []);
     } catch {
       toastError("Impossible de charger les utilisateurs.");
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
     }
   }, [toastError]);
   useEffect(() => { load(); }, [load]);
@@ -71,7 +76,7 @@ export default function ManageUsers() {
       }
       setEditing(null);
       setCreating(false);
-      load();
+      load({ silent: true });
     } catch (e) {
       toastError(apiErrorMessage(e, "Enregistrement impossible."));
     } finally {
@@ -84,7 +89,7 @@ export default function ManageUsers() {
     try {
       await deleteUser(u.id_utilisateur);
       success("Compte supprimé.");
-      load();
+      load({ silent: true });
     } catch (e) {
       toastError(apiErrorMessage(e, "Suppression impossible : des réservations sont liées à ce compte."));
     }
@@ -99,7 +104,20 @@ export default function ManageUsers() {
         eyebrow="Administration"
         title="Utilisateurs"
         subtitle="Créez les comptes du personnel et corrigez la catégorie tarifaire des clients."
-        actions={<button className="btn-primary" onClick={openCreate}>Créer un compte</button>}
+        actions={
+          <>
+            {/* AJOUT : bouton de rafraîchissement manuel (pas de polling sur cette page) */}
+            <button
+              className="btn-outline flex items-center gap-1.5"
+              onClick={() => load({ silent: true })}
+              disabled={refreshing}
+            >
+              <LuRefreshCw className={refreshing ? "animate-spin" : ""} size={16} />
+              Actualiser
+            </button>
+            <button className="btn-primary" onClick={openCreate}>Créer un compte</button>
+          </>
+        }
       />
 
       <div className="mb-4 flex flex-wrap gap-2">

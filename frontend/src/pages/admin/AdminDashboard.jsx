@@ -10,7 +10,7 @@ import { formatMoney } from "../../utils/formatMoney";
 import {
   fetchAdminChart, fetchAdminOccupancy, fetchAdminRevenue, fetchAdminRevenueMonthly,
 } from "../../api/chartApi";
-import { BarsChart, DonutChart, AreaTrend, ChartCard } from "../../components/common/Charts";
+import { DonutChart, AreaTrend, ChartCard } from "../../components/common/Charts";
 import StatCard from "../../components/common/StatCard";
 import { LuCalendarDays, LuHourglass, LuChartBar, LuBanknote } from "react-icons/lu";
 
@@ -74,21 +74,14 @@ export default function AdminDashboard() {
             <ChartCard title="Évolution des revenus encaissés (6 derniers mois)">
               <AreaTrend data={revMonthly} dataKey="revenus" xKey="mois" name="Revenus (FCFA)" color="#c2410c" />
             </ChartCard>
-          </div>
-
-          <div className="mb-6 grid gap-6 xl:grid-cols-2">
-            <ChartCard title="Réservations par mois">
-              <BarsChart data={chart} dataKey="reservations" xKey="mois" name="Réservations" />
-            </ChartCard>
+            {/* ⚠ RETIRÉ : BarsChart "Réservations par mois", doublon exact de
+                l'AreaTrend "Évolution des réservations" ci-dessus (même state `chart`). */}
             <ChartCard title="Occupation des salles">
               <DonutChart data={occ} />
             </ChartCard>
-            {/* ✅ CORRIGÉ : Revenus par salle en courbe aire (style D) */}
-            <div className="xl:col-span-2">
-              <ChartCard title="Revenus par salle">
-                <AreaTrend data={rev} dataKey="revenus" xKey="salle" name="Revenus (FCFA)" color="#f97316" fillOpacity={0.08} />
-              </ChartCard>
-            </div>
+            <ChartCard title="Revenus par salle">
+              <AreaTrend data={rev} dataKey="revenus" xKey="salle" name="Revenus (FCFA)" color="#f97316" fillOpacity={0.08} />
+            </ChartCard>
           </div>
 
           <section className="card p-5">
@@ -104,6 +97,11 @@ export default function AdminDashboard() {
                         {b.client ? `${b.client.prenom} ${b.client.nom}` : `Client #${b.id_client}`} — {b.salle?.nom_salle ?? `salle #${b.id_salle}`}
                       </p>
                       <p className="text-xs text-ink/50">{formatDateTime(b.date_debut)} → {formatDateTime(b.date_fin)}</p>
+                      {b.note_interne && (
+                        <p className="mt-1 max-w-md truncate text-xs text-accent-dark" title={b.note_interne}>
+                          Note réception : {b.note_interne}
+                        </p>
+                      )}
                     </div>
                     <StatutBadge statut={b.statut_effectif ?? b.statut} />
                   </li>

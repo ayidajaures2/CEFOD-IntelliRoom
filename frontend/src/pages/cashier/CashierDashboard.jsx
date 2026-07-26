@@ -19,7 +19,7 @@ export default function CashierDashboard() {
       setPayments(extractList(data));
     } catch { /* réessayé au prochain tick */ }
   }, []);
-  usePolling(load, 10000);
+  usePolling(load, 20000);
 
   const [byMode, setByMode] = useState([]);
   const [rev, setRev] = useState([]);

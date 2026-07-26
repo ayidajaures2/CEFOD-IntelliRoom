@@ -24,7 +24,7 @@ export default function ClientDashboard() {
     } catch { /* le tableau de bord reste consultable */ }
     finally { setLoading(false); }
   }, []);
-  usePolling(load, 15000);
+  usePolling(load, 20000);
 
   const upcoming = bookings
     .filter((b) => ["validee", "confirmee", "en_attente"].includes(b.statut))

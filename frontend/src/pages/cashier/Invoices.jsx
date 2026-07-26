@@ -12,6 +12,7 @@ import { formatDateTime } from "../../utils/formatDate";
 import { MODES_PAIEMENT, MODE_PAIEMENT_LABELS } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
 import { extractList } from "../../utils/extract";
+import { LuRefreshCw } from "react-icons/lu";
 
 /**
  * Caisse : encaisser un paiement présentiel pour une réservation validée,
@@ -23,11 +24,15 @@ export default function CashierPayments() {
   const [payments, setPayments] = useState([]);
   const [toCollect, setToCollect] = useState([]); // réservations validées sans paiement
   const [loading, setLoading] = useState(true);
+  // AJOUT : distingue le chargement plein écran du refresh manuel (bouton)
+  const [refreshing, setRefreshing] = useState(false);
   const [collecting, setCollecting] = useState(null);
   const [form, setForm] = useState({ montant: "", mode_paiement: "especes", reference: "" });
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (silent) setRefreshing(true);
+    else setLoading(true);
     try {
       const [p, b] = await Promise.all([fetchPendingPayments(), fetchAllBookings()]);
       setPayments(extractList(p.data));
@@ -36,7 +41,8 @@ export default function CashierPayments() {
     } catch {
       toastError("Impossible de charger les données de caisse.");
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
     }
   }, [toastError]);
   useEffect(() => { load(); }, [load]);
@@ -57,7 +63,7 @@ export default function CashierPayments() {
       });
       success("Paiement enregistré.");
       setCollecting(null);
-      load();
+      load({ silent: true });
     } catch (e) {
       toastError(apiErrorMessage(e, "Enregistrement impossible."));
     } finally {
@@ -69,7 +75,7 @@ export default function CashierPayments() {
     try {
       await validatePayment(p.id_paiement);
       success("Paiement validé — réservation confirmée, facture émise.");
-      load();
+      load({ silent: true });
     } catch (e) {
       toastError(apiErrorMessage(e, "Validation impossible."));
     }
@@ -77,7 +83,21 @@ export default function CashierPayments() {
 
   return (
     <>
-      <PageHeader eyebrow="Caisse" title="Paiements" />
+      <PageHeader
+        eyebrow="Caisse"
+        title="Paiements"
+        actions={
+          // AJOUT : bouton de rafraîchissement manuel (pas de polling sur cette page)
+          <button
+            className="btn-outline flex items-center gap-1.5"
+            onClick={() => load({ silent: true })}
+            disabled={refreshing}
+          >
+            <LuRefreshCw className={refreshing ? "animate-spin" : ""} size={16} />
+            Actualiser
+          </button>
+        }
+      />
       {loading && <Loader />}
 
       {!loading && (
