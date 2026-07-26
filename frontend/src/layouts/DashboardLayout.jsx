@@ -29,7 +29,7 @@ const NAV_BY_ROLE = {
   [ROLES.CAISSIER]: [
     { to: "/caisse", label: "Tableau de bord", end: true },
     { to: "/caisse/paiements", label: "Paiements" },
-    { to: "/caisse/factures", label: "Factures" }, // ✅ AJOUT
+    { to: "/caisse/factures", label: "Factures" }, 
     { to: "/caisse/profil", label: "Mon profil" },
   ],
   [ROLES.ADMIN]: [

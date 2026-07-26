@@ -11,9 +11,9 @@ import { toApiDateTime } from "../../utils/formatDate";
 /**
  * Formulaire de demande de réservation (statut initial : en_attente).
  * Aucun paiement à ce stade — le prix affiché est indicatif, calculé
- * à partir du tarif de la catégorie du client (CLAUDE.md §3).
+ * à partir du tarif de la catégorie du client.
  *
- * ✅ AJOUT v8 : validation des horaires ouvrés CEFOD côté client.
+ * AJOUT v8 : validation des horaires ouvrés CEFOD côté client.
  *   - Affichage des horaires d'ouverture
  *   - Calcul de la durée en heures ouvrées uniquement
  *   - Blocage du bouton si créneau hors plage
@@ -42,7 +42,7 @@ export default function BookingForm({ rooms, user, initialRoomId = "", onSubmit,
       ?? (room.tarif_client ? { ...room.tarif_client } : null);
   }, [room, user]);
 
-  // ✅ AJOUT : validation horaires ouvrés
+  // AJOUT : validation horaires ouvrés
   const slotCheck = useMemo(() => {
     if (!form.date_debut || !form.date_fin) return null;
     const start = new Date(form.date_debut);
@@ -53,7 +53,7 @@ export default function BookingForm({ rooms, user, initialRoomId = "", onSubmit,
     return { errors, openMin };
   }, [form.date_debut, form.date_fin]);
 
-  // ✅ CORRIGÉ : estimation basée sur les heures ouvrées
+  // CORRIGÉ : estimation basée sur les heures ouvrées
   const estimation = useMemo(() => {
     if (!tarif || !slotCheck || slotCheck.errors) return null;
     const { openMin } = slotCheck;
@@ -79,7 +79,7 @@ export default function BookingForm({ rooms, user, initialRoomId = "", onSubmit,
   return (
     <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
       <div className="card space-y-4 p-6">
-        {/* ✅ AJOUT : bandeau horaires */}
+        {/* AJOUT : bandeau horaires */}
         <div className="rounded-lg bg-accent-soft px-4 py-3 text-sm text-ink/70">
           <span className="font-semibold text-accent-dark">Horaires d'ouverture :</span>{" "}
           {BUSINESS_HOURS_LABEL}
@@ -101,7 +101,7 @@ export default function BookingForm({ rooms, user, initialRoomId = "", onSubmit,
           <div>
             <label className="field-label" htmlFor="debut">Début</label>
             <input id="debut" type="datetime-local" className="field" value={form.date_debut} onChange={set("date_debut")} />
-            {/* ✅ AJOUT : erreur horaire début */}
+            {/* AJOUT : erreur horaire début */}
             {slotCheck?.errors?.date_debut && (
               <p className="mt-1 text-xs font-medium text-accent-dark">{slotCheck.errors.date_debut}</p>
             )}
@@ -110,14 +110,14 @@ export default function BookingForm({ rooms, user, initialRoomId = "", onSubmit,
             <label className="field-label" htmlFor="fin">Fin</label>
             <input id="fin" type="datetime-local" className="field" value={form.date_fin} onChange={set("date_fin")} />
             {datesInvalid && <p className="mt-1 text-xs font-medium text-accent-dark">La fin doit être après le début.</p>}
-            {/* ✅ AJOUT : erreur horaire fin */}
+            {/* AJOUT : erreur horaire fin */}
             {!datesInvalid && slotCheck?.errors?.date_fin && (
               <p className="mt-1 text-xs font-medium text-accent-dark">{slotCheck.errors.date_fin}</p>
             )}
           </div>
         </div>
 
-        {/* ✅ AJOUT : erreur durée minimum */}
+        {/* AJOUT : erreur durée minimum */}
         {slotCheck?.errors?.duree && (
           <p className="rounded-lg bg-accent-dark/10 px-4 py-2 text-xs font-medium text-accent-dark">
             {slotCheck.errors.duree}
@@ -145,7 +145,7 @@ export default function BookingForm({ rooms, user, initialRoomId = "", onSubmit,
         {estimation ? (
           <div className="mt-4 space-y-2 text-sm">
             <p className="flex justify-between"><span className="text-ink/60">Tarif</span><span>{formatMoney(tarif.prix)} / {tarif.unite}</span></p>
-            {/* ✅ AJOUT : affichage heures ouvrées */}
+            {/* AJOUT : affichage heures ouvrées */}
             <p className="flex justify-between"><span className="text-ink/60">Durée ouvrée</span><span>{Math.floor(estimation.openMin / 60)} h {estimation.openMin % 60 > 0 ? `${estimation.openMin % 60} min` : ""}</span></p>
             <p className="flex justify-between"><span className="text-ink/60">Durée facturée</span><span>{estimation.units} {tarif.unite}(s)</span></p>
             <p className="flex justify-between border-t border-ink/10 pt-2 font-display text-lg font-bold">

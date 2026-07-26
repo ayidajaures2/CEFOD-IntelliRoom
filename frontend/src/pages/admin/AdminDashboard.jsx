@@ -19,10 +19,10 @@ export default function AdminDashboard() {
   const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [chart, setChart] = useState([]);      // réservations par mois
-  const [occ, setOcc] = useState([]);          // occupation (donut)
-  const [rev, setRev] = useState([]);          // revenus par salle (barres)
-  const [revMonthly, setRevMonthly] = useState([]); // revenus par mois (courbe)
+  const [chart, setChart] = useState([]);
+  const [occ, setOcc] = useState([]);
+  const [rev, setRev] = useState([]);
+  const [revMonthly, setRevMonthly] = useState([]);
 
   useEffect(() => {
     const grab = (setter) => ({ data }) => setter(Array.isArray(data) ? data : data.data ?? []);
@@ -46,7 +46,7 @@ export default function AdminDashboard() {
 
   const cards = [
     { label: "Réservations totales", value: stats?.total_reservations ?? recent.length, icon: LuCalendarDays },
-    { label: "En attente", value: stats?.reservations_en_attente ?? recent.filter((b) => b.statut === "en_attente").length, icon: LuHourglass, accent: true },
+    { label: "En attente", value: stats?.reservations_en_attente ?? recent.filter((b) => b.statut === "en_attente").length, icon: LuHourglass},
     { label: "Taux d'occupation", value: stats?.taux_occupation != null ? `${stats.taux_occupation}%` : "—", icon: LuChartBar },
     { label: "Revenus encaissés", value: stats?.revenus != null ? formatMoney(stats.revenus) : "—", icon: LuBanknote },
   ];
@@ -67,7 +67,6 @@ export default function AdminDashboard() {
             ))}
           </div>
 
-          {/* Courbes évolutives (tendances dans le temps) — pleine largeur */}
           <div className="mb-6 grid gap-6">
             <ChartCard title="Évolution des réservations (6 derniers mois)">
               <AreaTrend data={chart} dataKey="reservations" xKey="mois" name="Réservations" color="#f97316" />
@@ -84,9 +83,10 @@ export default function AdminDashboard() {
             <ChartCard title="Occupation des salles">
               <DonutChart data={occ} />
             </ChartCard>
+            {/* ✅ CORRIGÉ : Revenus par salle en courbe aire (style D) */}
             <div className="xl:col-span-2">
               <ChartCard title="Revenus par salle">
-                <BarsChart data={rev} dataKey="revenus" xKey="salle" name="Revenus (FCFA)" color="#0d0d0d" />
+                <AreaTrend data={rev} dataKey="revenus" xKey="salle" name="Revenus (FCFA)" color="#f97316" fillOpacity={0.08} />
               </ChartCard>
             </div>
           </div>

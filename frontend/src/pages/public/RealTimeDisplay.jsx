@@ -61,10 +61,11 @@ export default function RealTimeDisplay() {
       {/* ===== Bandeau supérieur ===== */}
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-5 sm:px-10">
         <Link to="/" className="flex items-center gap-3">
-          <span className="grid h-11 w-11 grid-cols-2 gap-1 rounded-xl bg-white/10 p-1.5">
-            <span className="rounded-sm bg-white" /><span className="rounded-sm bg-accent" />
-            <span className="rounded-sm bg-accent" /><span className="rounded-sm bg-white/40" />
-          </span>
+          <img
+              src="/cefod-logo.jpeg"
+              alt="Logo CEFOD"
+              className="h-9 w-9 rounded-lg object-cover"
+            />
           <span>
             <span className="block font-display text-xl font-black leading-none">
               CEFOD <span className="text-accent">IntelliRoom</span>

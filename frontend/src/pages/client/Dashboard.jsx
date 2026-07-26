@@ -10,7 +10,7 @@ import { formatDateTime } from "../../utils/formatDate";
 import { CATEGORIE_CLIENT_LABELS, STATUT_RESERVATION_LABELS } from "../../utils/constants";
 import { useMemo } from "react";
 import { DonutChart, ChartCard } from "../../components/common/Charts";
-import { LuCalendarDays, LuHourglass, LuWallet } from "react-icons/lu";
+import { LuCalendarDays, LuHourglass, LuWallet, LuWalletCards, LuWalletMinimal } from "react-icons/lu";
 
 export default function ClientDashboard() {
   const { user } = useAuth();
@@ -51,7 +51,7 @@ export default function ClientDashboard() {
         {[
           { label: "Réservations", value: bookings.length, to: "/client/reservations", icon: LuCalendarDays },
           { label: "En attente de validation", value: pending, to: "/client/reservations", icon: LuHourglass },
-          { label: "À payer", value: toPay, to: "/client/reservations", icon: LuWallet, accent: true },
+          { label: "À payer", value: toPay, to: "/client/reservations", icon: LuWallet }
         ].map((c) => {
           const Icon = c.icon;
           return (

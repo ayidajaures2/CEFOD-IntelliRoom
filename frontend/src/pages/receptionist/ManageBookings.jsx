@@ -20,14 +20,13 @@ export default function ManageBookings() {
   const { success, error: toastError } = useNotify();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("en_attente");
+  const [filter, setFilter] = useState(""); // ✅ CORRIGÉ : "Toutes" par défaut
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await fetchAllBookings(filter ? { statut: filter } : undefined);
       let list = Array.isArray(data) ? data : data.data ?? [];
-      // Filtre aussi côté client au cas où l'API renverrait tout.
       if (filter) list = list.filter((b) => b.statut === filter);
       setBookings(list);
     } catch {
@@ -36,7 +35,7 @@ export default function ManageBookings() {
       setLoading(false);
     }
   }, [filter, toastError]);
-  usePolling(load, 10000); // nouvelles demandes visibles sans recharger
+  usePolling(load, 10000);
 
   const act = async (fn, b, message) => {
     try {

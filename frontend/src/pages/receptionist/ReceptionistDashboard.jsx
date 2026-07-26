@@ -44,7 +44,7 @@ export default function ReceptionistDashboard() {
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Demandes en attente" value={pending.length} icon={LuHourglass} accent />
+        <StatCard label="Demandes en attente" value={pending.length} icon={LuHourglass}/>
         <StatCard label="Salles libres maintenant" value={free} icon={LuCircleCheck} />
         <StatCard label="Salles occupées" value={occupied} icon={LuBuilding2} />
       </div>
