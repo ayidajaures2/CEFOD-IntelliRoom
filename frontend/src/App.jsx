@@ -29,6 +29,7 @@ import ManageBookings from "./pages/receptionist/ManageBookings";
 import ConversationsList from "./pages/receptionist/ConversationsList";
 import ConversationDetail from "./pages/receptionist/ConversationDetail";
 import ReceptionistInvoices from "./pages/receptionist/Invoices";
+import ReceptionistClients from "./pages/receptionist/Clients";
 
 // Caissier
 import CashierDashboard from "./pages/cashier/CashierDashboard";
@@ -39,6 +40,7 @@ import CashierInvoices from "./pages/cashier/CashierInvoices"; // ✅ AJOUT
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ManageRooms from "./pages/admin/ManageRooms";
 import ManageUsers from "./pages/admin/ManageUsers";
+import AdminInvoices from "./pages/admin/Invoices";
 import Reports from "./pages/admin/Reports";
 import Settings from "./pages/admin/Settings";
 
@@ -80,6 +82,7 @@ export default function App() {
           <Route path="/reception/conversations" element={<ConversationsList />} />
           <Route path="/reception/conversations/:id" element={<ConversationDetail />} />
           <Route path="/reception/factures" element={<ReceptionistInvoices />} />
+          <Route path="/reception/clients" element={<ReceptionistClients />} />
           <Route path="/reception/profil" element={<Profile />} />
         </Route>
       </Route>
@@ -100,6 +103,7 @@ export default function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/salles" element={<ManageRooms />} />
           <Route path="/admin/utilisateurs" element={<ManageUsers />} />
+          <Route path="/admin/factures" element={<AdminInvoices />} />
           <Route path="/admin/rapports" element={<Reports />} />
           <Route path="/admin/parametres" element={<Settings />} />
           <Route path="/admin/profil" element={<Profile />} />

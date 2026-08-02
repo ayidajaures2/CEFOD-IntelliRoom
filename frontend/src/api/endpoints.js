@@ -106,6 +106,10 @@ export const ENDPOINTS = {
     cashierRevenue: "/cashier/revenue-chart",
   },
 
+  receptionist: {
+    clients: "/receptionist/clients", // GET — consultation seule, pas de CRUD (réservé admin)
+  },
+
   admin: {
     users: "/admin/users",
     user: (id) => `/admin/users/${id}`,

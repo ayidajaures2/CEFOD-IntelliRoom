@@ -37,6 +37,7 @@ const NAV_BY_ROLE = {
   [ROLES.RECEPTIONNISTE]: [
     { to: "/reception", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
     { to: "/reception/reservations", label: "Réservations", icon: LuCalendarCheck },
+    { to: "/reception/clients", label: "Clients", icon: LuUsers },
     { to: "/reception/conversations", label: "Messagerie clients", icon: LuMessageSquare },
     { to: "/reception/factures", label: "Factures", icon: LuReceipt },
     { to: "/reception/profil", label: "Mon profil", icon: LuUser },
@@ -51,6 +52,7 @@ const NAV_BY_ROLE = {
     { to: "/admin", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
     { to: "/admin/salles", label: "Salles & tarifs", icon: LuBuilding2 },
     { to: "/admin/utilisateurs", label: "Utilisateurs", icon: LuUsers },
+    { to: "/admin/factures", label: "Factures", icon: LuReceipt },
     { to: "/admin/rapports", label: "Rapports", icon: LuChartBar },
     { to: "/admin/parametres", label: "Paramètres", icon: LuSettings },
     { to: "/admin/profil", label: "Mon profil", icon: LuUser },
@@ -69,7 +71,7 @@ export default function DashboardLayout() {
       const { data } = await fetchNotifications();
       setNotifications(Array.isArray(data) ? data : data.data ?? []);
     } catch {
-      /* notifications non bloquantes */
+      /* silencieux */
     }
   }, []);
   usePolling(loadNotifications, 15000);
@@ -104,7 +106,7 @@ export default function DashboardLayout() {
   return (
     <div className="flex min-h-screen bg-ink/[0.03]">
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-ink p-4 text-paper transition-transform lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-paper/10 bg-ink p-4 text-paper transition-transform lg:static lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-label="Menu de l'espace"
