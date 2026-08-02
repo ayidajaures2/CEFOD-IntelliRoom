@@ -7,38 +7,53 @@ import { ROLES, ROLE_LABELS } from "../utils/constants";
 import { formatDateTime } from "../utils/formatDate";
 import Avatar from "../components/common/Avatar";
 import Logo from "../components/common/Logo";
-import { LuMenu, LuBell, LuLogOut } from "react-icons/lu";
+import {
+  LuMenu,
+  LuBell,
+  LuLogOut,
+  LuLayoutDashboard,
+  LuCalendarPlus,
+  LuCalendarCheck,
+  LuReceipt,
+  LuMessageSquare,
+  LuUser,
+  LuWallet,
+  LuBuilding2,
+  LuUsers,
+  LuChartBar,
+  LuSettings,
+} from "react-icons/lu";
 import ThemeToggle from "../components/common/ThemeToggle";
 
 const NAV_BY_ROLE = {
   [ROLES.CLIENT]: [
-    { to: "/client", label: "Tableau de bord", end: true },
-    { to: "/client/reserver", label: "Réserver une salle" },
-    { to: "/client/reservations", label: "Mes réservations" },
-    { to: "/client/factures", label: "Mes factures" },
-    { to: "/client/messages", label: "Messagerie" },
-    { to: "/client/profil", label: "Mon profil" },
+    { to: "/client", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
+    { to: "/client/reserver", label: "Réserver une salle", icon: LuCalendarPlus },
+    { to: "/client/reservations", label: "Mes réservations", icon: LuCalendarCheck },
+    { to: "/client/factures", label: "Mes factures", icon: LuReceipt },
+    { to: "/client/messages", label: "Messagerie", icon: LuMessageSquare },
+    { to: "/client/profil", label: "Mon profil", icon: LuUser },
   ],
   [ROLES.RECEPTIONNISTE]: [
-    { to: "/reception", label: "Tableau de bord", end: true },
-    { to: "/reception/reservations", label: "Réservations" },
-    { to: "/reception/conversations", label: "Messagerie clients" },
-    { to: "/reception/factures", label: "Factures" },
-    { to: "/reception/profil", label: "Mon profil" },
+    { to: "/reception", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
+    { to: "/reception/reservations", label: "Réservations", icon: LuCalendarCheck },
+    { to: "/reception/conversations", label: "Messagerie clients", icon: LuMessageSquare },
+    { to: "/reception/factures", label: "Factures", icon: LuReceipt },
+    { to: "/reception/profil", label: "Mon profil", icon: LuUser },
   ],
   [ROLES.CAISSIER]: [
-    { to: "/caisse", label: "Tableau de bord", end: true },
-    { to: "/caisse/paiements", label: "Paiements" },
-    { to: "/caisse/factures", label: "Factures" }, 
-    { to: "/caisse/profil", label: "Mon profil" },
+    { to: "/caisse", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
+    { to: "/caisse/paiements", label: "Paiements", icon: LuWallet },
+    { to: "/caisse/factures", label: "Factures", icon: LuReceipt },
+    { to: "/caisse/profil", label: "Mon profil", icon: LuUser },
   ],
   [ROLES.ADMIN]: [
-    { to: "/admin", label: "Tableau de bord", end: true },
-    { to: "/admin/salles", label: "Salles & tarifs" },
-    { to: "/admin/utilisateurs", label: "Utilisateurs" },
-    { to: "/admin/rapports", label: "Rapports" },
-    { to: "/admin/parametres", label: "Paramètres" },
-    { to: "/admin/profil", label: "Mon profil" },
+    { to: "/admin", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
+    { to: "/admin/salles", label: "Salles & tarifs", icon: LuBuilding2 },
+    { to: "/admin/utilisateurs", label: "Utilisateurs", icon: LuUsers },
+    { to: "/admin/rapports", label: "Rapports", icon: LuChartBar },
+    { to: "/admin/parametres", label: "Paramètres", icon: LuSettings },
+    { to: "/admin/profil", label: "Mon profil", icon: LuUser },
   ],
 };
 
@@ -82,13 +97,12 @@ export default function DashboardLayout() {
 
   const links = NAV_BY_ROLE[role] ?? [];
   const linkClass = ({ isActive }) =>
-    `flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-      isActive ? "bg-accent text-paper" : "text-paper/65 hover:bg-paper/10 hover:text-paper"
+    `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+      isActive ? "text-accent" : "text-paper/65 hover:text-paper"
     }`;
 
   return (
     <div className="flex min-h-screen bg-ink/[0.03]">
-      {/* Barre latérale */}
       <aside
         className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-ink p-4 text-paper transition-transform lg:static lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -100,11 +114,15 @@ export default function DashboardLayout() {
         </div>
 
         <nav className="flex flex-1 flex-col gap-1">
-          {links.map((l) => (
-            <NavLink key={l.to} to={l.to} end={l.end} className={linkClass} onClick={() => setSidebarOpen(false)}>
-              {l.label}
-            </NavLink>
-          ))}
+          {links.map((l) => {
+            const Icon = l.icon;
+            return (
+              <NavLink key={l.to} to={l.to} end={l.end} className={linkClass} onClick={() => setSidebarOpen(false)}>
+                {Icon && <Icon className="h-[18px] w-[18px] shrink-0" />}
+                {l.label}
+              </NavLink>
+            );
+          })}
         </nav>
 
         <div className="mt-4 border-t border-paper/10 pt-4">
@@ -115,7 +133,7 @@ export default function DashboardLayout() {
               <p className="text-xs text-accent">{ROLE_LABELS[role]}</p>
             </div>
           </div>
-          <button onClick={handleLogout} className="btn mt-3 flex w-full items-center gap-2 px-3 py-2 text-paper/65 hover:bg-paper/10 hover:text-paper">
+          <button onClick={handleLogout} className="btn mt-3 flex w-full items-center gap-2 px-3 py-2 text-paper/65 hover:text-paper">
             <LuLogOut className="h-4 w-4" /> Se déconnecter
           </button>
         </div>
@@ -124,7 +142,6 @@ export default function DashboardLayout() {
         <button className="fixed inset-0 z-30 bg-ink/50 lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Fermer le menu" />
       )}
 
-      {/* Contenu */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-ink/10 bg-surface px-4 lg:px-8">
           <button className="btn-ghost px-2 lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu"><LuMenu className="h-5 w-5" /></button>

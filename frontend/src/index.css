@@ -38,7 +38,7 @@
   --paper: #0a0a0a;       /* fond des éléments (proche du noir pur) */
   --surface: #161616;     /* cartes : un cran au-dessus du fond pour le relief */
   --accent-soft: #2a1a10; /* orange sourd pour les fonds doux */
-  --page-bg: #000000;     /* fond de page : NOIR PUR */
+  --page-bg: #0a0a0a;     /* fond de page : noir adouci, pas du noir pur (confort visuel) */
 }
 
 @layer base {

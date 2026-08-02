@@ -14,17 +14,11 @@ import { apiErrorMessage } from "../../utils/apiError";
 import { extractList } from "../../utils/extract";
 import { LuRefreshCw } from "react-icons/lu";
 
-/**
- * Caisse : encaisser un paiement présentiel pour une réservation validée,
- * et valider les paiements en attente (le caissier clique « Valider » —
- * CLAUDE.md §4, cycle Paiement).
- */
 export default function CashierPayments() {
   const { success, error: toastError } = useNotify();
   const [payments, setPayments] = useState([]);
-  const [toCollect, setToCollect] = useState([]); // réservations validées sans paiement
+  const [toCollect, setToCollect] = useState([]);
   const [loading, setLoading] = useState(true);
-  // AJOUT : distingue le chargement plein écran du refresh manuel (bouton)
   const [refreshing, setRefreshing] = useState(false);
   const [collecting, setCollecting] = useState(null);
   const [form, setForm] = useState({ montant: "", mode_paiement: "especes", reference: "" });
@@ -87,7 +81,6 @@ export default function CashierPayments() {
         eyebrow="Caisse"
         title="Paiements"
         actions={
-          // AJOUT : bouton de rafraîchissement manuel (pas de polling sur cette page)
           <button
             className="btn-outline flex items-center gap-1.5"
             onClick={() => load({ silent: true })}
@@ -101,30 +94,38 @@ export default function CashierPayments() {
       {loading && <Loader />}
 
       {!loading && (
-        <div className="grid gap-6 xl:grid-cols-2">
-          {/* Encaissements à faire */}
+        <div className="flex flex-col gap-8">
           <section>
             <h2 className="mb-3 font-display text-lg font-bold">Réservations validées — à encaisser</h2>
             {toCollect.length === 0 ? (
               <EmptyState title="Rien à encaisser" hint="Les réservations validées en attente de paiement s'affichent ici." />
             ) : (
-              <ul className="grid gap-3">
-                {toCollect.map((b) => (
-                  <li key={b.id_reservation} className="card flex flex-wrap items-center justify-between gap-3 p-4">
-                    <div>
-                      <p className="font-medium">
-                        {b.client ? `${b.client.prenom} ${b.client.nom}` : `Client #${b.id_client}`} — {b.salle?.nom_salle ?? `salle #${b.id_salle}`}
-                      </p>
-                      <p className="text-xs text-ink/50">{formatDateTime(b.date_debut)} → {formatDateTime(b.date_fin)}</p>
-                    </div>
-                    <button className="btn-primary px-3 py-2 text-sm" onClick={() => openCollect(b)}>Encaisser</button>
-                  </li>
-                ))}
-              </ul>
+              <div className="card overflow-x-auto">
+                <table className="table-base">
+                  <thead>
+                    <tr><th>Client</th><th>Salle</th><th>Période</th><th className="text-right">Action</th></tr>
+                  </thead>
+                  <tbody>
+                    {toCollect.map((b) => (
+                      <tr key={b.id_reservation}>
+                        <td className="font-medium">
+                          {b.client ? `${b.client.prenom} ${b.client.nom}` : `Client #${b.id_client}`}
+                        </td>
+                        <td>{b.salle?.nom_salle ?? `salle #${b.id_salle}`}</td>
+                        <td className="text-xs text-ink/50">
+                          {formatDateTime(b.date_debut)} → {formatDateTime(b.date_fin)}
+                        </td>
+                        <td className="text-right">
+                          <button className="btn-primary px-3 py-1.5 text-xs" onClick={() => openCollect(b)}>Encaisser</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
 
-          {/* Paiements enregistrés */}
           <section>
             <h2 className="mb-3 font-display text-lg font-bold">Paiements enregistrés</h2>
             {payments.length === 0 ? (

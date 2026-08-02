@@ -12,20 +12,14 @@ import { LuRefreshCw } from "react-icons/lu";
 
 const FILTERS = ["", "en_attente", "validee", "confirmee", "annulee"];
 
-/**
- * Examen des demandes par la réceptionniste. En cas de doute sur la
- * catégorie déclarée, elle ne valide pas et contacte l'admin (CLAUDE.md §3).
- */
 export default function ManageBookings() {
   const { success, error: toastError } = useNotify();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  // AJOUT : distingue le chargement plein écran du refresh manuel (bouton)
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState(""); // Toutes par défaut
+  const [filter, setFilter] = useState("");
 
-  // AJOUT : modale de note interne
-  const [noteModal, setNoteModal] = useState(null); // booking en cours d'édition ou null
+  const [noteModal, setNoteModal] = useState(null);
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
@@ -45,8 +39,6 @@ export default function ManageBookings() {
     }
   }, [filter, toastError]);
 
-
-  // Bouton "Actualiser" ci-dessous.
   useEffect(() => {
     load();
   }, [load]);
@@ -61,7 +53,6 @@ export default function ManageBookings() {
     }
   };
 
-  // AJOUT : ouverture / fermeture de la modale de note
   const openNote = (b) => {
     setNoteModal(b);
     setNoteText(b.note_interne ?? "");
@@ -96,7 +87,6 @@ export default function ManageBookings() {
         title="Demandes de réservation"
         subtitle="Vérifiez la disponibilité et la catégorie du client avant de valider. Le client paie après validation."
         actions={
-          // AJOUT : bouton de rafraîchissement manuel
           <button
             className="btn-outline flex items-center gap-1.5"
             onClick={() => load({ silent: true })}
@@ -152,7 +142,6 @@ export default function ManageBookings() {
                           <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => window.confirm("Refuser cette demande ?") && act(rejectBooking, b, "Demande refusée.")}>Refuser</button>
                         </>
                       )}
-                      {/* AJOUT : bouton note interne, disponible quel que soit le statut */}
                       <button
                         className="btn-outline relative px-3 py-1.5 text-xs"
                         onClick={() => openNote(b)}
@@ -172,7 +161,6 @@ export default function ManageBookings() {
         </div>
       )}
 
-      {/* AJOUT : modale de saisie de la note interne */}
       {noteModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
@@ -189,7 +177,7 @@ export default function ManageBookings() {
               {noteModal.salle?.nom_salle ?? `#${noteModal.id_salle}`}
             </p>
             <textarea
-              className="field min-h-32 w-full resize-y"
+              className="field min-h-32 w-full resize-y focus:!border-ink/15 focus:!ring-0 focus:!outline-none"
               placeholder="Ex : client déjà venu, prévoir chaises supplémentaires, doute sur la catégorie déclarée..."
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
