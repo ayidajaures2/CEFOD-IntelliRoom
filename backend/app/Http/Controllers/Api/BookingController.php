@@ -124,7 +124,6 @@ class BookingController extends Controller
             return response()->json(['message' => 'Accès non autorisé'], 403);
         }
 
-        // AJOUT : note_interne visible uniquement pour réception/admin.
         if (in_array($user->role, ['receptionniste', 'admin'], true)) {
             $reservation->makeVisible('note_interne');
         }
@@ -132,10 +131,6 @@ class BookingController extends Controller
         return response()->json($reservation);
     }
 
-    /**
-     * AJOUT v8 : validation des créneaux via BusinessHours sur update aussi.
-     * AJOUT : prise en charge de note_interne (staff uniquement).
-     */
     public function update(Request $request, $id)
     {
         $reservation = Reservation::find($id);
@@ -164,7 +159,6 @@ class BookingController extends Controller
             'date_fin' => 'sometimes|date|after:date_debut',
             'motif' => 'nullable|string|max:255',
             'statut' => ($user->role === 'client' ? 'prohibited' : 'sometimes') . '|in:en_attente,validee,confirmee,annulee',
-            // AJOUT : note interne réservée à la réception/admin.
             'note_interne' => ($user->role === 'client' ? 'prohibited' : 'sometimes') . '|nullable|string|max:1000',
         ]);
 
@@ -188,8 +182,6 @@ class BookingController extends Controller
         $reservation->update($validated);
         $reservation->load('salle');
 
-        // AJOUT : renvoyer note_interne dans la réponse pour le staff
-        // (sinon le frontend ne peut pas afficher la note qu'il vient de saisir).
         if (in_array($user->role, ['receptionniste', 'admin'], true)) {
             $reservation->makeVisible('note_interne');
         }
@@ -262,12 +254,18 @@ class BookingController extends Controller
         }
 
         $result = $query->paginate(20);
-        // AJOUT : note_interne visible pour la réception.
         $result->getCollection()->makeVisible('note_interne');
 
         return response()->json($result);
     }
 
+    /**
+     * Refuse la validation d'une demande dont le créneau est déjà entièrement
+     * passé (date_fin dépassée) — évite qu'un client paie pour un créneau
+     * qu'il ne pourra jamais utiliser. Aucune expiration automatique des
+     * demandes en attente n'existe encore (cf. perspectives d'évolution) :
+     * ce contrôle est le seul filet de sécurité pour l'instant.
+     */
     public function validateBooking($id)
     {
         $reservation = Reservation::find($id);
@@ -280,6 +278,12 @@ class BookingController extends Controller
             return response()->json([
                 'message' => "Cette réservation ne peut pas être validée (statut actuel : {$reservation->statut})"
             ], 400);
+        }
+
+        if ($reservation->date_fin->isPast()) {
+            return response()->json([
+                'message' => 'Impossible de valider cette réservation : le créneau demandé est déjà passé. Refusez la demande et invitez le client à en soumettre une nouvelle.'
+            ], 422);
         }
 
         $reservation->statut = 'validee';
@@ -298,12 +302,29 @@ class BookingController extends Controller
         return response()->json($reservation->load('salle'));
     }
 
+    /**
+     * Même logique de garde-fou que validateBooking() : on ne confirme
+     * (donc on ne facture) que depuis le statut validee, et jamais un
+     * créneau déjà entièrement passé.
+     */
     public function confirm($id)
     {
         $reservation = Reservation::find($id);
 
         if (!$reservation) {
             return response()->json(['message' => "Réservation {$id} introuvable"], 404);
+        }
+
+        if ($reservation->statut !== 'validee') {
+            return response()->json([
+                'message' => "Cette réservation ne peut pas être confirmée (statut actuel : {$reservation->statut})"
+            ], 400);
+        }
+
+        if ($reservation->date_fin->isPast()) {
+            return response()->json([
+                'message' => 'Impossible de confirmer cette réservation : le créneau demandé est déjà passé.'
+            ], 422);
         }
 
         $reservation->statut = 'confirmee';
@@ -350,7 +371,6 @@ class BookingController extends Controller
         }
 
         $result = $query->paginate(20);
-        // AJOUT : note_interne visible pour l'admin (AdminDashboard, Option A).
         $result->getCollection()->makeVisible('note_interne');
 
         return response()->json($result);
