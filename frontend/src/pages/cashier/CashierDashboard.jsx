@@ -28,7 +28,7 @@ export default function CashierDashboard() {
     fetchCashierRevenue().then(({ data }) => setRev(Array.isArray(data) ? data : data.data ?? [])).catch(() => {});
   }, []);
 
-  const pending = payments.filter((p) => p.statut === "en_attente");
+  const pending = payments.filter((p) => p.statut === "encaisse");
   const totalPending = pending.reduce((s, p) => s + Number(p.montant ?? 0), 0);
 
   return (
@@ -39,21 +39,22 @@ export default function CashierDashboard() {
         actions={<Link to="/caisse/paiements" className="btn-primary">Gérer les paiements</Link>}
       />
       <div className="grid gap-4 sm:grid-cols-2">
-        <StatCard label="Paiements à valider" value={pending.length} icon={LuHourglass} accent />
+        <StatCard label="Encaissements en attente de validation" value={pending.length} icon={LuHourglass} accent />
         <StatCard label="Montant en attente" value={formatMoney(totalPending)} icon={LuWallet} />
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <ChartCard title="Paiements par mode">
+        <ChartCard title="Paiements validés par mode">
           <DonutChart data={byMode} />
         </ChartCard>
-        <ChartCard title="Encaissements des 7 derniers jours">
-          <BarsChart data={rev} dataKey="montant" xKey="jour" name="Encaissé (FCFA)" />
+        <ChartCard title="Encaissements espèces des 7 derniers jours">
+          <BarsChart data={rev} dataKey="montant" xKey="jour" name="Encaissé (FCFA)" maxBarSize={48} barCategoryGap="35%" />
         </ChartCard>
       </div>
 
       <p className="mt-6 text-sm text-ink/55">
-        Rappel du parcours : un client dont la réservation est <strong>validée</strong> paie soit en ligne (Moov/Airtel — validation automatique),
-        soit ici en espèces. La validation d'un paiement confirme la réservation et déclenche la facture.
+        Rappel du parcours : un client dont la réservation est <strong>validée</strong> paie soit en ligne (Moov/Airtel — validation
+        automatique), soit en espèces ici même. Chèque et virement sont enregistrés directement par la comptabilité. Dans tous les
+        cas manuels, c'est la <strong>comptabilité</strong> qui valide et déclenche la confirmation de la réservation.
       </p>
     </>
   );

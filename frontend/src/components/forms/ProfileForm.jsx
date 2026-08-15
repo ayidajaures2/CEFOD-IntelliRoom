@@ -8,8 +8,11 @@ import { CATEGORIE_CLIENT_LABELS, ROLE_LABELS } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
 
 /**
- * Profil partagé (client & admin). La `categorie_client` est affichée en
- * lecture seule : seul l'administrateur peut la corriger (CLAUDE.md §3).
+ * Profil partagé (tous les rôles). L'e-mail est totalement immuable après
+ * création — verrouillé ici, et de toute façon jamais accepté par
+ * AuthController::updateProfile() même si on l'envoyait. La catégorie
+ * tarifaire du client est affichée en lecture seule : seul l'administrateur
+ * peut la corriger (via sous_categorie_client, ManageUsers.jsx).
  */
 export default function ProfileForm() {
   const { user, refreshUser } = useAuth();
@@ -17,7 +20,6 @@ export default function ProfileForm() {
   const [form, setForm] = useState({
     nom: user?.nom ?? "",
     prenom: user?.prenom ?? "",
-    email: user?.email ?? "",
     telephone: user?.telephone ?? "",
   });
   const [pwd, setPwd] = useState({ current_password: "", password: "", password_confirmation: "" });
@@ -31,7 +33,7 @@ export default function ProfileForm() {
   const saveInfo = async () => {
     setSavingInfo(true);
     try {
-      await updateProfile(form);
+      await updateProfile(form); // email volontairement absent : immuable
       await refreshUser();
       success("Profil mis à jour.");
     } catch (e) {
@@ -101,8 +103,10 @@ export default function ProfileForm() {
           </div>
         </div>
         <div>
-          <label className="field-label" htmlFor="p-email">Adresse e-mail</label>
-          <input id="p-email" type="email" className="field" value={form.email} onChange={setInfo("email")} />
+          <label className="field-label" htmlFor="p-email">
+            Adresse e-mail <span className="font-normal text-ink/40">(immuable, non modifiable)</span>
+          </label>
+          <input id="p-email" type="email" className="field disabled:bg-ink/5 disabled:text-ink/40" value={user?.email ?? ""} disabled />
         </div>
         <div>
           <label className="field-label" htmlFor="p-tel">Téléphone</label>

@@ -12,7 +12,7 @@ import StatutBadge from "../../components/common/StatutBadge";
 import Modal from "../../components/common/Modal";
 import { formatDateTime } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
-import { MODES_PAIEMENT, OPERATOR_FEES, computeOpenMinutes } from "../../utils/constants"; // ⚠ CORRIGÉ : ajout computeOpenMinutes
+import { MODES_PAIEMENT_AUTOMATIQUES, MODES_PAIEMENT, OPERATOR_FEES, computeOpenMinutes } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
 import { extractList } from "../../utils/extract";
 
@@ -64,8 +64,11 @@ export default function MyBookings() {
   };
 
   /**
-   * ⚠ CORRIGÉ — Même barème que PaymentController::calculatePrice côté serveur.
-   * Utilise désormais computeOpenMinutes() pour ne facturer que les heures ouvrées.
+   * Miroir de PaymentController::calculatePrice() côté serveur : salle
+   * (heures ouvrées) + services annexes (dont la retransmission radio,
+   * ajoutée automatiquement côté serveur à la création — voir
+   * BookingController::store()). Affichage indicatif ; le montant fait foi
+   * côté serveur.
    */
   const computePrice = (bk) => {
     if (bk.paiement?.montant != null) return Number(bk.paiement.montant);
@@ -76,13 +79,15 @@ export default function MyBookings() {
     const debut = new Date(bk.date_debut);
     const fin = new Date(bk.date_fin);
 
-    // ⚠ CORRIGÉ : calcul basé sur les minutes ouvrées uniquement
     const openMin = computeOpenMinutes(debut, fin);
     const unites = tarif.unite === "heure"
       ? Math.max(1, Math.ceil(openMin / 60))
       : Math.max(1, Math.ceil(openMin / 600)); // 1 jour ouvré = 10 h = 600 min
 
-    return Number(tarif.prix) * unites;
+    const prixSalle = Number(tarif.prix) * unites;
+    const prixServices = (bk.services ?? []).reduce((s, rs) => s + Number(rs.montant ?? 0), 0);
+
+    return prixSalle + prixServices;
   };
 
   const openPayment = async (b) => {
@@ -130,7 +135,10 @@ export default function MyBookings() {
   const frais = price != null ? computeFrais(price, mode) : 0;
   const total = price != null ? price + frais : null;
 
-  const onlineModes = MODES_PAIEMENT.filter((m) => m.value !== "especes");
+  // ⚠ CORRIGÉ : filtrer sur MODES_PAIEMENT_AUTOMATIQUES précisément — pas
+  // "tout sauf especes", qui incluait aussi chèque et virement (rejetés par
+  // simulatePayment() côté serveur, in:moov_money,airtel_money uniquement).
+  const onlineModes = MODES_PAIEMENT.filter((m) => MODES_PAIEMENT_AUTOMATIQUES.includes(m.value));
 
   return (
     <>

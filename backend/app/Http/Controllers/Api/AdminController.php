@@ -39,11 +39,11 @@ class AdminController extends Controller
             'totalRooms' => Salle::count(),
             'totalBookings' => Reservation::count(),
             'pendingBookings' => Reservation::where('statut', 'en_attente')->count(),
-            // ⚠ CORRIGÉ : 'terminee' n'est JAMAIS stocké en base (statut
-            // calculé par l'accessor statut_effectif) — l'ancien filtre
-            // renvoyait toujours 0. "Terminée" = confirmée + fin passée.
-            'completedBookings' => Reservation::where('statut', 'confirmee')
-                ->where('date_fin', '<', now())->count(),
+            // "Terminée" = statut terminee (stocké) OU confirmée dont la fin est passée.
+            'completedBookings' => Reservation::where('statut', 'terminee')
+                ->orWhere(function ($q) {
+                    $q->where('statut', 'confirmee')->where('date_fin', '<', now());
+                })->count(),
             'cancelledBookings' => Reservation::where('statut', 'annulee')->count(),
             'totalRevenue' => Paiement::where('statut', 'valide')->sum('montant') ?? 0,
             'occupancyRate' => $this->computeOccupancyRate(),
@@ -57,15 +57,10 @@ class AdminController extends Controller
         if ($total === 0) {
             return 0;
         }
-        // ⚠ CORRIGÉ : se base sur statut_effectif (calculé), pas sur la
-        // colonne brute qui n'est jamais mise à jour automatiquement.
         $occupied = $salles->filter(fn ($s) => $s->statut_effectif !== 'libre')->count();
         return round(($occupied / $total) * 100, 1);
     }
 
-    /**
-     * Endpoint combiné — tout le dashboard admin en UN SEUL appel réseau.
-     */
     public function dashboardFull()
     {
         return response()->json([
@@ -145,11 +140,6 @@ class AdminController extends Controller
             ->get();
     }
 
-    /**
-     * ✅ AJOUT — Revenus encaissés par mois (6 derniers mois), pour la
-     * courbe évolutive du dashboard admin. Se base sur les paiements
-     * validés : montant + frais.
-     */
     public function getRevenueMonthly()
     {
         $data = Paiement::selectRaw(
@@ -259,6 +249,10 @@ class AdminController extends Controller
         return response()->json($user);
     }
 
+    /**
+     * On saisit sous_categorie_client (obligatoire pour un client, interdite
+     * pour le staff) ; categorie_client est dérivé par le mutateur du modèle.
+     */
     public function storeUser(Request $request)
     {
         $validated = $request->validate([
@@ -267,13 +261,8 @@ class AdminController extends Controller
             'email' => 'required|email|unique:utilisateur,email',
             'telephone' => 'nullable|string|max:20',
             'password' => 'required|string|min:6',
-            'role' => 'required|in:admin,receptionniste,caissier,client',
-            // ⚠ CORRIGÉ : sans cette règle, la catégorie envoyée par le
-            // frontend était silencieusement IGNORÉE (absente de $validated)
-            // → un client créé par l'admin n'avait pas de catégorie
-            // tarifaire, et calculatePrice() retombait sur le tarif par
-            // défaut. Obligatoire pour un client, interdite pour le staff.
-            'categorie_client' => 'required_if:role,client|prohibited_unless:role,client|nullable|in:org_internationale,admin_ong,association_base',
+            'role' => 'required|in:admin,sg,comptabilite,receptionniste,caissier,client',
+            'sous_categorie_client' => 'required_if:role,client|prohibited_unless:role,client|nullable|in:association,organisation_feminine,admin_tchad,ong_tchad,syndicat_tchad,ong_internationale,structure_internationale',
         ]);
 
         $validated['password'] = Hash::make($validated['password']);
@@ -284,6 +273,11 @@ class AdminController extends Controller
         return response()->json($user, 201);
     }
 
+    /**
+     * L'email est immuable même pour l'admin : aucune règle ne l'accepte ici.
+     * La catégorie tarifaire se corrige via sous_categorie_client (le mutateur
+     * recalcule categorie_client).
+     */
     public function updateUser(Request $request, $id)
     {
         $user = Utilisateur::findOrFail($id);
@@ -291,16 +285,11 @@ class AdminController extends Controller
         $validated = $request->validate([
             'nom' => 'sometimes|string|max:100',
             'prenom' => 'sometimes|string|max:100',
-            'email' => 'sometimes|email|unique:utilisateur,email,' . $id . ',id_utilisateur',
             'telephone' => 'nullable|string|max:20',
-            'role' => 'sometimes|in:admin,receptionniste,caissier,client',
-            // Seul l'admin peut corriger la catégorie tarifaire d'un client.
-            'categorie_client' => 'sometimes|nullable|in:org_internationale,admin_ong,association_base',
+            'role' => 'sometimes|in:admin,sg,comptabilite,receptionniste,caissier,client',
+            'sous_categorie_client' => 'sometimes|nullable|in:association,organisation_feminine,admin_tchad,ong_tchad,syndicat_tchad,ong_internationale,structure_internationale',
         ]);
 
-        // ⚠ AJOUT : si un nouveau mot de passe est fourni, on le hache ;
-        // sinon on n'y touche pas (le frontend n'envoie password que s'il
-        // est renseigné).
         if ($request->filled('password')) {
             $request->validate(['password' => 'string|min:6']);
             $validated['password'] = Hash::make($request->password);
@@ -316,7 +305,7 @@ class AdminController extends Controller
         $user = Utilisateur::findOrFail($id);
 
         $validated = $request->validate([
-            'role' => 'required|in:admin,receptionniste,caissier,client',
+            'role' => 'required|in:admin,sg,comptabilite,receptionniste,caissier,client',
         ]);
 
         $user->role = $validated['role'];
@@ -339,10 +328,11 @@ class AdminController extends Controller
         }
 
         $hasReservationsAsClient = Reservation::where('id_client', $user->id_utilisateur)->exists();
-        $hasReservationsAsReceptionniste = Reservation::where('id_receptionniste', $user->id_utilisateur)->exists();
+        $hasReservationsAsSg = Reservation::where('id_sg', $user->id_utilisateur)->exists();
         $hasPaiementsAsCaissier = Paiement::where('id_caissier', $user->id_utilisateur)->exists();
+        $hasPaiementsAsComptable = Paiement::where('id_comptable', $user->id_utilisateur)->exists();
 
-        if ($hasReservationsAsClient || $hasReservationsAsReceptionniste || $hasPaiementsAsCaissier) {
+        if ($hasReservationsAsClient || $hasReservationsAsSg || $hasPaiementsAsCaissier || $hasPaiementsAsComptable) {
             return response()->json([
                 'message' => 'Impossible de supprimer cet utilisateur : il a des réservations ou paiements associés. '
                     . 'Pensez à désactiver le compte plutôt qu\'à le supprimer si l\'historique doit être conservé.'
@@ -367,8 +357,6 @@ class AdminController extends Controller
 
     public function getSettings()
     {
-        // Placeholder simple : à remplacer par une vraie table `settings`
-        // si tu veux le rendre persistant.
         return response()->json([
             'app_name' => 'CEFOD IntelliRoom',
             'contact_email' => 'contact@cefod.org',
@@ -378,7 +366,6 @@ class AdminController extends Controller
 
     public function updateSettings(Request $request)
     {
-        // TODO: persister réellement ces paramètres (table settings, cache, etc.)
         return response()->json([
             'message' => 'Paramètres mis à jour (persistance à implémenter)',
             'settings' => $request->all(),

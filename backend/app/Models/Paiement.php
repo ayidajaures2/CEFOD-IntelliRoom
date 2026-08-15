@@ -13,15 +13,16 @@ class Paiement extends Model
     protected $fillable = [
         'id_reservation',
         'id_caissier',
+        'id_comptable',
         'montant',
-        'frais',        // ✅ frais Mobile Money (0 pour espèces)
-        // ⚠ 'total' est une colonne GÉNÉRÉE (VIRTUAL/STORED) : NE JAMAIS la
-        //   mettre dans $fillable, sinon Eloquent tente de l'écrire et MySQL
-        //   lève « The value specified for generated column 'total' is not allowed ».
-        'mode_paiement',
+        'frais',        // frais Mobile Money (0 pour espèces/chèque/virement)
+        // 'total' est une colonne GÉNÉRÉE (VIRTUAL/STORED) : NE JAMAIS la
+        // mettre dans $fillable, sinon Eloquent tente de l'écrire et MySQL
+        // lève « The value specified for generated column 'total' is not allowed ».
+        'mode_paiement', // especes, cheque, virement, moov_money, airtel_money
         'date_paiement',
-        'statut',
-        'reference'
+        'statut',        // en_attente, encaisse, valide, annule
+        'reference',
     ];
 
     protected $casts = [
@@ -48,6 +49,11 @@ class Paiement extends Model
     public function caissier()
     {
         return $this->belongsTo(Utilisateur::class, 'id_caissier');
+    }
+
+    public function comptable()
+    {
+        return $this->belongsTo(Utilisateur::class, 'id_comptable');
     }
 
     public function facture()

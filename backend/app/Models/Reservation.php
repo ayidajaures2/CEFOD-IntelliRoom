@@ -13,27 +13,43 @@ class Reservation extends Model
     protected $fillable = [
         'id_salle',
         'id_client',
-        'id_receptionniste',
+        'id_sg',
         'date_creation',
         'date_debut',
         'date_fin',
         'motif',
         'statut',
-        'note_interne', // AJOUT
+        'note_interne',
+        'type_activite',
+        'type_activite_autre',
+        'sujet_principal',
+        'sujet_principal_autre',
+        'public_cible',
+        'medias_invites',
+        'retransmission_radio',
+        'duree_retransmission_heures',
+        'nombre_participants',
+        'nombre_femmes',
+        'titre_groupe_utilisateur',
+        'adresse_groupe_utilisateur',
+        'nom_responsable_reunion',
+        'adresse_responsable_reunion',
     ];
 
-    // AJOUT : note_interne masquée par défaut (réservée réception/admin).
-    // Elle est explicitement révélée avec ->makeVisible('note_interne')
-    // dans les endpoints réceptionniste/admin du BookingController.
+    // note_interne masquée par défaut (réservée réception en lecture/SG/admin),
+    // révélée explicitement via ->makeVisible('note_interne') dans les
+    // endpoints concernés du BookingController.
     protected $hidden = ['note_interne'];
 
     protected $casts = [
         'date_creation' => 'datetime',
         'date_debut' => 'datetime',
         'date_fin' => 'datetime',
+        'retransmission_radio' => 'boolean',
+        'duree_retransmission_heures' => 'decimal:2',
+        'nombre_participants' => 'integer',
     ];
 
-    // Ajoute automatiquement statut_effectif dans le JSON renvoyé par l'API
     protected $appends = ['statut_effectif'];
 
     public function salle()
@@ -46,9 +62,9 @@ class Reservation extends Model
         return $this->belongsTo(Utilisateur::class, 'id_client');
     }
 
-    public function receptionniste()
+    public function sg()
     {
-        return $this->belongsTo(Utilisateur::class, 'id_receptionniste');
+        return $this->belongsTo(Utilisateur::class, 'id_sg');
     }
 
     public function paiement()
@@ -56,17 +72,22 @@ class Reservation extends Model
         return $this->hasOne(Paiement::class, 'id_reservation');
     }
 
+    public function services()
+    {
+        return $this->hasMany(ReservationService::class, 'id_reservation');
+    }
+
     /**
-     * Le statut stocké en base (`statut`) ne connaît que :
-     * en_attente, validee, confirmee, annulee.
+     * Statut stocké en base : en_attente, validee, confirmee, terminee, annulee.
      *
-     * "en_cours" et "terminee" ne sont JAMAIS écrits en base : ils sont
-     * déduits en comparant date_debut/date_fin à l'heure actuelle, à
-     * chaque fois que la réservation est sérialisée en JSON.
+     * "terminee" est un statut réel en base (à faire basculer par une tâche
+     * planifiée quand date_fin est dépassée sur une réservation confirmee) ;
+     * "en_cours" reste purement calculé, il n'existe jamais en base : c'est
+     * un état transitoire entre confirmee et terminee.
      */
     public function getStatutEffectifAttribute()
     {
-        if ($this->statut !== 'confirmee') {
+        if (!in_array($this->statut, ['confirmee', 'terminee'])) {
             return $this->statut;
         }
 

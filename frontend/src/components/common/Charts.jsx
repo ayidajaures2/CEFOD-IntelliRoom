@@ -4,19 +4,20 @@ import {
   AreaChart, Area,
 } from "recharts";
 
-export const CHART_COLORS = ["#f97316", "var(--color-ink)", "#c2410c", "#fdba74", "#525252", "#fed7aa"];
+// Kaki (#8b733f) ajouté en fin de palette générale — sert de teinte de repli
+// pour les graphiques positionnels ET pour désambiguïser les cas où deux
+// oranges de CHART_COLORS se retrouveraient trop proches l'un de l'autre
+// (ex. modes de paiement, voir resolvePaymentModeColor ci-dessous).
+export const CHART_COLORS = ["#f97316", "var(--color-ink)", "#c2410c", "#fdba74", "#525252", "#fed7aa", "#8b733f"];
 
 const GRID_STROKE = "color-mix(in srgb, var(--color-ink) 7%, transparent)";
 
-// Mapping couleur par statut, utilisé uniquement par StackedBars (réservations).
-// ⚠ RETIRÉ : règles pour les statuts de salle (Libre/Occupée/Réservée) — trop
-// de nuances d'orange proches les unes des autres, source de confusion.
-// DonutChart repasse au coloriage par position (comme avant).
 function normalizeKey(value) {
   if (typeof value !== "string") return "";
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
+// Mapping couleur par statut, utilisé uniquement par StackedBars (réservations).
 const STATUS_COLOR_RULES = [
   { test: (v) => v.startsWith("annul"), color: "var(--color-ink)" },   // Annulée(s) -> noir
   { test: (v) => v.startsWith("effectu"), color: "#c2410c" },          // Effectuée(s) -> orange foncé
@@ -30,14 +31,36 @@ function resolveStatusColor(key, name, fallbackIndex) {
   return rule ? rule.color : CHART_COLORS[fallbackIndex % CHART_COLORS.length];
 }
 
+// Modes de paiement (donut "Paiements par mode", caisse) : à 3 modes, la
+// palette positionnelle place deux oranges proches (index 0 et 2) — source
+// de confusion réelle repérée en session. Le kaki désambiguïse Moov Money.
+const PAYMENT_MODE_COLOR_RULES = [
+  { test: (v) => v.includes("espece"), color: "#f97316" },      // Espèces -> orange accent
+  { test: (v) => v.includes("moov"), color: "#8b733f" },        // Moov Money -> kaki
+  { test: (v) => v.includes("airtel"), color: "var(--color-ink)" }, // Airtel Money -> encre
+];
+
+function resolvePaymentModeColor(name, fallbackIndex) {
+  const n = normalizeKey(name);
+  const rule = PAYMENT_MODE_COLOR_RULES.find((r) => r.test(n));
+  return rule ? rule.color : CHART_COLORS[fallbackIndex % CHART_COLORS.length];
+}
+
+function isPaymentModeData(data) {
+  if (!data || data.length === 0) return false;
+  return data.every((d) => PAYMENT_MODE_COLOR_RULES.some((r) => r.test(normalizeKey(d.name))));
+}
+
 export function DonutChart({ data, height = 260 }) {
   const empty = !data || data.every((d) => !d.value);
   if (empty) return <ChartEmpty height={height} />;
+  const paymentMode = isPaymentModeData(data);
+  const colorFor = (d, i) => (paymentMode ? resolvePaymentModeColor(d.name, i) : CHART_COLORS[i % CHART_COLORS.length]);
   return (
     <ResponsiveContainer width="100%" height={height}>
       <PieChart>
         <Pie data={data} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={2}>
-          {data.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+          {data.map((d, i) => <Cell key={i} fill={colorFor(d, i)} />)}
         </Pie>
         <Tooltip />
         <Legend />

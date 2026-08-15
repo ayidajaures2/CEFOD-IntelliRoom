@@ -19,6 +19,7 @@ import {
   LuUser,
   LuWallet,
   LuBuilding2,
+  LuBoxes,
   LuUsers,
   LuChartBar,
   LuSettings,
@@ -42,6 +43,18 @@ const NAV_BY_ROLE = {
     { to: "/reception/factures", label: "Factures", icon: LuReceipt },
     { to: "/reception/profil", label: "Mon profil", icon: LuUser },
   ],
+  [ROLES.SG]: [
+    { to: "/sg", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
+    { to: "/sg/reservations", label: "Demandes à valider", icon: LuCalendarCheck },
+    { to: "/sg/clients", label: "Clients", icon: LuUsers },
+    { to: "/sg/profil", label: "Mon profil", icon: LuUser },
+  ],
+  [ROLES.COMPTABILITE]: [
+    { to: "/comptabilite", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
+    { to: "/comptabilite/paiements", label: "Paiements", icon: LuWallet },
+    { to: "/comptabilite/factures", label: "Factures", icon: LuReceipt },
+    { to: "/comptabilite/profil", label: "Mon profil", icon: LuUser },
+  ],
   [ROLES.CAISSIER]: [
     { to: "/caisse", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
     { to: "/caisse/paiements", label: "Paiements", icon: LuWallet },
@@ -51,6 +64,7 @@ const NAV_BY_ROLE = {
   [ROLES.ADMIN]: [
     { to: "/admin", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
     { to: "/admin/salles", label: "Salles & tarifs", icon: LuBuilding2 },
+    { to: "/admin/services", label: "Services annexes", icon: LuBoxes },
     { to: "/admin/utilisateurs", label: "Utilisateurs", icon: LuUsers },
     { to: "/admin/factures", label: "Factures", icon: LuReceipt },
     { to: "/admin/rapports", label: "Rapports", icon: LuChartBar },

@@ -35,9 +35,6 @@ export default function ReceptionistDashboard() {
   const occupied = rooms.filter((r) => (r.statut_effectif ?? r.statut) === "occupee").length;
   const free = rooms.filter((r) => (r.statut_effectif ?? r.statut) === "libre").length;
 
-  // AJOUT : répartition du nombre de réservations par salle, calculée sur
-  // les réservations chargées (même page que "Demandes en attente" plus haut,
-  // donc même limite de pagination — pas un total historique exact).
   const bookingsBySalle = useMemo(() => {
     const counts = new Map();
     bookings.forEach((b) => {
@@ -54,7 +51,7 @@ export default function ReceptionistDashboard() {
       <PageHeader
         eyebrow="Réception"
         title="Tableau de bord"
-        actions={<Link to="/reception/reservations" className="btn-primary">Traiter les demandes</Link>}
+        actions={<Link to="/reception/reservations" className="btn-primary">Voir les réservations</Link>}
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
@@ -102,7 +99,6 @@ export default function ReceptionistDashboard() {
         <ChartCard title="Occupation actuelle des salles">
           <DonutChart data={occ} />
         </ChartCard>
-        {/* AJOUT : réservations par salle */}
         <div className="xl:col-span-2">
           <ChartCard title="Réservations par salle">
             <BarsChart

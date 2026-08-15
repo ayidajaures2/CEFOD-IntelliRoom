@@ -8,22 +8,21 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('Salle', function (Blueprint $table) {
+        Schema::create('salle', function (Blueprint $table) {
             $table->id('id_salle');
             $table->string('nom_salle', 100);
             $table->string('type_salle', 50);
             $table->integer('capacite');
             $table->text('description')->nullable();
             $table->text('equipements')->nullable();
+            $table->string('image', 255)->nullable();
             $table->enum('statut', ['libre', 'reservee', 'occupee'])->default('libre');
-            $table->timestamps(false); // on utilise date_creation manuellement? mais on peut ajouter un champ si besoin
-            // Pour rester cohérent avec le MCD, pas de created_at/updated_at automatiques.
+            $table->timestamps(false);
         });
-        // Si vous voulez un champ date_creation, ajoutez-le, mais votre modèle ne l'utilise pas. Laissons simple.
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('Salle');
+        Schema::dropIfExists('salle');
     }
 };

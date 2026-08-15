@@ -43,7 +43,7 @@ class NotificationController extends Controller
      *   titre   : string (obligatoire, max 255)
      *   contenu : string (obligatoire, max 2000)
      *   type    : string (optionnel — ex. info, alerte ; "info" par défaut)
-     *   role    : client|receptionniste|caissier|admin (optionnel — tous si absent)
+     *   role    : client|receptionniste|sg|caissier|comptabilite|admin (optionnel — tous si absent)
      */
     public function broadcast(Request $request)
     {
@@ -51,7 +51,7 @@ class NotificationController extends Controller
             'titre'   => ['required', 'string', 'max:255'],
             'contenu' => ['required', 'string', 'max:2000'],
             'type'    => ['nullable', 'string', 'max:50'],
-            'role'    => ['nullable', 'in:client,receptionniste,caissier,admin'],
+            'role'    => ['nullable', 'in:client,receptionniste,sg,caissier,comptabilite,admin'],
         ]);
 
         $destinataires = Utilisateur::query()
@@ -74,7 +74,6 @@ class NotificationController extends Controller
             'date_creation'  => $now,
         ])->all();
 
-        // Insertion en masse : une seule requête, même pour des centaines d'utilisateurs.
         Notification::insert($rows);
 
         return response()->json([

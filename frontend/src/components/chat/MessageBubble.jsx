@@ -2,7 +2,7 @@ import { formatTime } from "../../utils/formatDate";
 
 /**
  * Bulle de message. `own` = message envoyé par l'utilisateur courant.
- * `expediteur` ∈ client | receptionniste | caissier | admin | chatbot.
+ * `expediteur` ∈ client | receptionniste | sg | caissier | comptabilite | admin | chatbot.
  */
 export default function MessageBubble({ message, own }) {
   return (

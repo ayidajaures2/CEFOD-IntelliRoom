@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Facture;
+use App\Models\LigneFacture;
 use App\Models\Paiement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,10 +13,24 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class InvoiceController extends Controller
 {
-    /** Le personnel peut consulter/télécharger toutes les factures. */
-    private function isStaff(): bool
+    /**
+     * Peut CONSULTER une facture : admin, comptabilité, caissier,
+     * réceptionniste (le client accède aux siennes via une autre voie).
+     * Le SG n'est pas concerné par les factures.
+     */
+    private function canView(): bool
     {
-        return in_array(Auth::user()?->role, ['receptionniste', 'admin', 'caissier'], true);
+        return in_array(Auth::user()?->role, ['admin', 'comptabilite', 'caissier', 'receptionniste'], true);
+    }
+
+    /**
+     * Peut TÉLÉCHARGER une facture : admin, comptabilité (le client télécharge
+     * les siennes via le contrôle d'appartenance). Caissier et réceptionniste
+     * consultent mais ne téléchargent pas ; le SG n'a aucun accès.
+     */
+    private function canDownload(): bool
+    {
+        return in_array(Auth::user()?->role, ['admin', 'comptabilite'], true);
     }
 
     /**
@@ -27,7 +42,7 @@ class InvoiceController extends Controller
         $invoices = Facture::whereHas('paiement.reservation', function ($query) use ($user) {
                 $query->where('id_client', $user->id_utilisateur);
             })
-            ->with(['paiement.reservation.salle'])
+            ->with(['paiement.reservation.salle', 'lignes'])
             ->orderBy('date_emission', 'desc')
             ->get();
 
@@ -39,12 +54,10 @@ class InvoiceController extends Controller
     }
 
     /**
-     * CLIENT & RÉCEPTIONNISTE - Télécharger une facture en PDF
-     *
-     * ⚠ CORRIGÉ : la route est aussi montée sous /receptionist, mais le
-     * contrôle "appartient au client" renvoyait 403 à la réceptionniste.
-     * Le personnel peut désormais télécharger toute facture ; le client
-     * reste limité aux siennes.
+     * Télécharger une facture PDF.
+     * - Client : uniquement les siennes.
+     * - Staff : admin et comptabilité seulement (caissier/réception : consultation
+     *   seule → 403 ; SG : aucun accès).
      */
     public function download($id)
     {
@@ -53,13 +66,18 @@ class InvoiceController extends Controller
                 'paiement',
                 'paiement.reservation',
                 'paiement.reservation.client',
-                'paiement.reservation.salle'
+                'paiement.reservation.salle',
+                'lignes',
+                'comptable',
             ])->findOrFail($id);
 
             $user = Auth::user();
-            if (!$this->isStaff()
-                && $facture->paiement->reservation->id_client !== $user->id_utilisateur) {
-                return response()->json(['message' => 'Accès non autorisé'], 403);
+            $estProprietaire = $facture->paiement->reservation->id_client === $user->id_utilisateur;
+
+            if (!$this->canDownload() && !$estProprietaire) {
+                return response()->json([
+                    'message' => 'Vous n\'êtes pas autorisé à télécharger cette facture.'
+                ], 403);
             }
 
             if (!class_exists('Barryvdh\DomPDF\Facade\Pdf')) {
@@ -70,6 +88,7 @@ class InvoiceController extends Controller
 
             $pdf = Pdf::loadView('pdf.invoice', [
                 'facture' => $facture,
+                'lignes' => $facture->lignes,
                 'reservation' => $facture->paiement->reservation,
                 'client' => $facture->paiement->reservation->client,
                 'salle' => $facture->paiement->reservation->salle,
@@ -77,10 +96,8 @@ class InvoiceController extends Controller
             ]);
 
             return $pdf->download('facture-' . $facture->numero_facture . '.pdf');
-
         } catch (\Exception $e) {
             Log::error('Erreur PDF', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-
             return response()->json([
                 'message' => 'Erreur lors de la génération du PDF',
                 'error' => $e->getMessage(),
@@ -90,7 +107,9 @@ class InvoiceController extends Controller
     }
 
     /**
-     * CLIENT - Voir une facture
+     * Voir une facture (consultation).
+     * - Client : uniquement les siennes.
+     * - Staff : admin, comptabilité, caissier, réception (SG exclu).
      */
     public function showClientInvoice($id)
     {
@@ -99,11 +118,13 @@ class InvoiceController extends Controller
             'paiement',
             'paiement.reservation',
             'paiement.reservation.client',
-            'paiement.reservation.salle'
+            'paiement.reservation.salle',
+            'lignes',
         ])->findOrFail($id);
 
-        if (!$this->isStaff()
-            && $facture->paiement->reservation->id_client !== $user->id_utilisateur) {
+        $estProprietaire = $facture->paiement->reservation->id_client === $user->id_utilisateur;
+
+        if (!$this->canView() && !$estProprietaire) {
             return response()->json(['message' => 'Accès non autorisé'], 403);
         }
 
@@ -111,16 +132,7 @@ class InvoiceController extends Controller
     }
 
     /**
-     * RÉCEPTIONNISTE - Liste des factures
-     *
-     * ⚠ CORRIGÉ (2 bugs) :
-     *  1. `$query->sum('paiement.montant')` — SQL invalide (la notation
-     *     relation.colonne n'existe pas en SQL) → erreur 500 « Unknown
-     *     column 'paiement.montant' » à CHAQUE ouverture de la page.
-     *     Le total passe maintenant par une vraie jointure.
-     *  2. La recherche mélangeait where/orWhereHas sans parenthèses :
-     *     combinée aux filtres de dates, la clause OR court-circuitait
-     *     tout le reste. Regroupée dans une closure.
+     * RÉCEPTION / CAISSE - Liste des factures (consultation).
      */
     public function receptionistInvoices(Request $request)
     {
@@ -128,7 +140,8 @@ class InvoiceController extends Controller
             'paiement',
             'paiement.reservation',
             'paiement.reservation.client',
-            'paiement.reservation.salle'
+            'paiement.reservation.salle',
+            'lignes',
         ])->orderBy('date_emission', 'desc');
 
         if ($request->has('search')) {
@@ -165,7 +178,7 @@ class InvoiceController extends Controller
     }
 
     /**
-     * RÉCEPTIONNISTE - Envoyer une facture par email
+     * Envoyer une facture par email (admin / comptabilité).
      */
     public function sendByEmail($id)
     {
@@ -174,7 +187,9 @@ class InvoiceController extends Controller
                 'paiement',
                 'paiement.reservation',
                 'paiement.reservation.client',
-                'paiement.reservation.salle'
+                'paiement.reservation.salle',
+                'lignes',
+                'comptable',
             ])->findOrFail($id);
 
             $client = $facture->paiement->reservation->client;
@@ -192,24 +207,22 @@ class InvoiceController extends Controller
 
             $pdf = Pdf::loadView('pdf.invoice', [
                 'facture' => $facture,
+                'lignes' => $facture->lignes,
                 'reservation' => $facture->paiement->reservation,
                 'client' => $client,
                 'salle' => $facture->paiement->reservation->salle,
                 'paiement' => $facture->paiement,
             ]);
 
-            // TODO: Envoyer l'email avec le PDF
-            // Mail::to($email)->send(new InvoiceMail($facture, $pdf));
+            // TODO: Mail::to($email)->send(new InvoiceMail($facture, $pdf));
 
             return response()->json([
                 'message' => 'Facture envoyée par email à ' . $email,
                 'client' => $client,
                 'email' => $email
             ]);
-
         } catch (\Exception $e) {
             Log::error('Erreur envoi email facture', ['error' => $e->getMessage()]);
-
             return response()->json([
                 'message' => 'Erreur lors de l\'envoi de l\'email',
                 'error' => $e->getMessage()
@@ -219,9 +232,6 @@ class InvoiceController extends Controller
 
     /**
      * ADMIN - Liste des factures (supervision complète)
-     *
-     * ⚠ CORRIGÉ : mêmes erreurs SQL `sum('paiement.montant')` qu'en
-     * réception (page admin en 500), remplacées par des jointures.
      */
     public function adminIndex(Request $request)
     {
@@ -229,7 +239,8 @@ class InvoiceController extends Controller
             'paiement',
             'paiement.reservation',
             'paiement.reservation.client',
-            'paiement.reservation.salle'
+            'paiement.reservation.salle',
+            'lignes',
         ])->orderBy('date_emission', 'desc');
 
         if ($request->has('search')) {
@@ -271,7 +282,8 @@ class InvoiceController extends Controller
             'paiement.reservation',
             'paiement.reservation.client',
             'paiement.reservation.salle',
-            'paiement.reservation.salle.tarifs'
+            'paiement.reservation.salle.tarifs',
+            'lignes',
         ])->findOrFail($id);
 
         $facture->montant = $facture->paiement?->montant ?? 0;
@@ -283,7 +295,9 @@ class InvoiceController extends Controller
     }
 
     /**
-     * CAISSIER - Générer une facture manuelle
+     * COMPTABILITÉ / ADMIN - Réparer une facture manquante (cas exceptionnel :
+     * paiement valide sans facture, suite à un incident). Le chemin normal
+     * génère la facture automatiquement à la validation du paiement.
      */
     public function generateManually(Request $request)
     {
@@ -291,7 +305,7 @@ class InvoiceController extends Controller
             'id_paiement' => 'required|exists:paiement,id_paiement',
         ]);
 
-        $paiement = Paiement::with(['reservation'])->find($validated['id_paiement']);
+        $paiement = Paiement::with(['reservation.salle', 'reservation.services.service'])->find($validated['id_paiement']);
         if (!$paiement) {
             return response()->json(['message' => 'Paiement non trouvé'], 404);
         }
@@ -310,27 +324,48 @@ class InvoiceController extends Controller
             ], 409);
         }
 
-        // ⚠ CORRIGÉ : count()+1 → collisions après suppression ; on
-        // repart du dernier id, insensible aux trous.
+        $reservation = $paiement->reservation;
         $next = (Facture::max('id_facture') ?? 0) + 1;
+
         $facture = Facture::create([
             'id_paiement' => $paiement->id_paiement,
             'numero_facture' => 'FACT-' . now()->format('Y') . '-' . str_pad($next, 4, '0', STR_PAD_LEFT),
+            'id_comptable' => Auth::id(),
             'date_emission' => now(),
             'mode_generation' => 'manuelle',
+            'net_a_payer' => $paiement->montant,
+            'total_ttc' => $paiement->montant + $paiement->frais,
         ]);
+
+        $montantServices = $reservation ? $reservation->services->sum('montant') : 0;
+        $montantSalle = max(0, $paiement->montant - $montantServices);
+
+        LigneFacture::create([
+            'id_facture' => $facture->id_facture,
+            'quantite' => 1,
+            'description' => 'Location salle ' . ($reservation->salle->nom_salle ?? '—'),
+            'prix_unitaire' => $montantSalle,
+            'montant' => $montantSalle,
+        ]);
+
+        if ($reservation) {
+            foreach ($reservation->services as $rs) {
+                LigneFacture::create([
+                    'id_facture' => $facture->id_facture,
+                    'quantite' => $rs->quantite,
+                    'description' => $rs->service->nom ?? 'Service',
+                    'prix_unitaire' => $rs->prix_unitaire_applique,
+                    'montant' => $rs->montant,
+                ]);
+            }
+        }
 
         return response()->json([
             'message' => 'Facture générée avec succès',
-            'facture' => $facture->load(['paiement.reservation.client', 'paiement.reservation.salle'])
+            'facture' => $facture->load(['paiement.reservation.client', 'paiement.reservation.salle', 'lignes'])
         ], 201);
     }
 
-    /**
-     * ADMIN - Statistiques des factures par année
-     *
-     * ⚠ CORRIGÉ : même bug sum('paiement.montant') → jointure.
-     */
     private function getInvoicesByYear()
     {
         $years = Facture::selectRaw('YEAR(date_emission) as year')
@@ -352,9 +387,6 @@ class InvoiceController extends Controller
         return $data;
     }
 
-    /**
-     * ADMIN - Supprimer une facture (seulement si pas de paiement validé)
-     */
     public function deleteInvoice($id)
     {
         $facture = Facture::with(['paiement'])->findOrFail($id);

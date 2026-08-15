@@ -25,8 +25,6 @@ class ChatbotController extends Controller
 
     public function ask(Request $request)
     {
-        // ⚠ CORRIGÉ : le frontend envoie le champ `message` ;
-        // on accepte aussi `question` pour rester rétrocompatible.
         $question = strtolower(trim(
             $request->input('message', $request->input('question', ''))
         ));
@@ -38,7 +36,6 @@ class ChatbotController extends Controller
             ]);
         }
 
-        // 1. FAQ
         $faq = Faq::where('question', 'LIKE', "%{$question}%")
             ->orWhere('mots_cles', 'LIKE', "%{$question}%")
             ->first();
@@ -47,7 +44,6 @@ class ChatbotController extends Controller
             return response()->json(['reponse' => $faq->reponse, 'type' => 'faq']);
         }
 
-        // 2. Disponibilité
         if (str_contains($question, 'disponible') || str_contains($question, 'libre')) {
             $salles = Salle::where('statut', 'libre')->get();
             if ($salles->count() > 0) {
@@ -59,7 +55,6 @@ class ChatbotController extends Controller
             return response()->json(['reponse' => 'Aucune salle disponible.', 'type' => 'disponibilite']);
         }
 
-        // 3. Capacité
         if (str_contains($question, 'capacité') || str_contains($question, 'combien')) {
             preg_match('/\d+/', $question, $matches);
             if ($matches) {
@@ -75,7 +70,6 @@ class ChatbotController extends Controller
             }
         }
 
-        // 4. Tarifs
         if (str_contains($question, 'tarif') || str_contains($question, 'prix')) {
             $tarifs = TarifSalle::with('salle')->get();
             if ($tarifs->count() > 0) {
@@ -87,7 +81,6 @@ class ChatbotController extends Controller
             }
         }
 
-        // 5. Procédure
         if (str_contains($question, 'réserver') || str_contains($question, 'reserver')) {
             return response()->json([
                 'reponse' => "Pour réserver :\n1. Connectez-vous\n2. Choisissez une salle\n3. Sélectionnez une date\n4. Validez\n5. Payez (en ligne ou sur place)",
@@ -95,7 +88,6 @@ class ChatbotController extends Controller
             ]);
         }
 
-        // 6. Localisation
         if (str_contains($question, 'localisation') || str_contains($question, 'adresse')) {
             return response()->json([
                 'reponse' => "Le CEFOD est situé à [Adresse]. Ouvert du lundi au vendredi de 8h à 18h.",
@@ -103,7 +95,6 @@ class ChatbotController extends Controller
             ]);
         }
 
-        // 7. Pas de réponse
         return response()->json([
             'reponse' => "Je n'ai pas trouvé de réponse. Souhaitez-vous être redirigé vers un réceptionniste ?",
             'type' => 'redirect',
@@ -125,7 +116,7 @@ class ChatbotController extends Controller
         $validated = $request->validate([
             'question' => 'required|string',
             'reponse' => 'required|string',
-            'categorie' => 'required|string|max:50', // ⚠ CORRIGÉ : plus d'ENUM, la colonne est passée en VARCHAR
+            'categorie' => 'required|string|max:50',
             'mots_cles' => 'nullable|string',
         ]);
 
@@ -139,7 +130,7 @@ class ChatbotController extends Controller
         $validated = $request->validate([
             'question' => 'sometimes|string',
             'reponse' => 'sometimes|string',
-            'categorie' => 'sometimes|string|max:50', // ⚠ CORRIGÉ : plus d'ENUM, la colonne est passée en VARCHAR
+            'categorie' => 'sometimes|string|max:50',
             'mots_cles' => 'nullable|string',
         ]);
 
@@ -157,21 +148,22 @@ class ChatbotController extends Controller
     // CONVERSATIONS (auth:sanctum)
     // ============================================================
 
-    /** Le personnel (réception, admin, caisse) voit toutes les conversations. */
+    /** Le personnel voit toutes les conversations. Le SG n'y a PAS accès :
+     * la communication avec les clients est le rôle exclusif de la réception
+     * (décision actée) — le SG se concentre sur la validation des demandes. */
     private function isStaff(): bool
     {
         return in_array(Auth::user()?->role, ['receptionniste', 'admin', 'caissier'], true);
     }
 
     /**
-     * ⚠ CORRIGÉ : la colonne `expediteur` du schéma n'accepte que
-     * client / receptionniste / chatbot — on mappe admin et caissier
-     * sur "receptionniste" pour éviter une violation d'ENUM.
+     * La colonne `expediteur` du schéma accepte désormais exactement les
+     * mêmes valeurs que `utilisateur.role` (client, receptionniste, sg,
+     * caissier, comptabilite, admin) + chatbot — plus besoin de mapping.
      */
     private function expediteurCourant(): string
     {
-        $role = Auth::user()?->role ?? 'client';
-        return $role === 'client' ? 'client' : 'receptionniste';
+        return Auth::user()?->role ?? 'client';
     }
 
     public function startConversation(Request $request)
@@ -187,10 +179,7 @@ class ChatbotController extends Controller
     public function sendMessage(Request $request)
     {
         $validated = $request->validate([
-            // ⚠ CORRIGÉ : `exists:conversation` (table au singulier) —
-            // c'était `exists:conversations`, cause du SQLSTATE[42S02].
             'id_conversation' => 'required|exists:conversation,id_conversation',
-            // ⚠ CORRIGÉ : le frontend envoie contenu_mess (et message en doublon).
             'contenu_mess' => 'required_without:message|string',
             'message' => 'required_without:contenu_mess|string',
         ]);
@@ -198,9 +187,6 @@ class ChatbotController extends Controller
         $contenu = $validated['contenu_mess'] ?? $validated['message'];
         $expediteur = $this->expediteurCourant();
 
-        // ⚠ ALIGNÉ sur le modèle Message réel : la colonne s'appelle
-        // `contenu` (le cahier des charges disait contenu_mess, mais le
-        // code fait foi). `date_envoi` renseignée car $timestamps = false.
         Message::create([
             'id_conversation' => $validated['id_conversation'],
             'expediteur' => $expediteur,
@@ -208,10 +194,6 @@ class ChatbotController extends Controller
             'date_envoi' => now(),
         ]);
 
-        // ⚠ CORRIGÉ (v3) : plus AUCUNE réponse automatique dans la messagerie
-        // humaine client ↔ réception. Le message client est simplement
-        // enregistré ; c'est la réception qui répond depuis son interface.
-        // Le chatbot public FAQ (/api/chatbot/ask) reste autonome de son côté.
         return response()->json(['message' => 'Message envoyé.']);
     }
 
@@ -232,9 +214,6 @@ class ChatbotController extends Controller
 
     public function getConversations()
     {
-        // ⚠ CORRIGÉ : la réception/admin voit TOUTES les conversations
-        // (avec l'utilisateur), sinon la page « Conversations » du
-        // personnel restait vide à jamais.
         $query = Conversation::with('messages')
             ->orderBy('debut_conversation', 'desc');
 
@@ -249,8 +228,6 @@ class ChatbotController extends Controller
 
     public function getMessages($id)
     {
-        // ⚠ CORRIGÉ : un client ne peut lire que SES conversations ;
-        // le personnel peut toutes les lire.
         $query = Conversation::with('messages');
         if (!$this->isStaff()) {
             $query->where('id_utilisateur', Auth::id());
@@ -267,7 +244,6 @@ class ChatbotController extends Controller
         }
 
         $conversation = $query->findOrFail($id);
-        // Supprimer d'abord les messages pour éviter un blocage de clé étrangère.
         Message::where('id_conversation', $conversation->id_conversation)->delete();
         $conversation->delete();
 

@@ -21,7 +21,7 @@ export default function NewBooking() {
     setSubmitting(true);
     try {
       await createBooking(payload);
-      success("Demande envoyée. La réception va l'examiner.");
+      success("Demande envoyée. Le secrétariat général va l'examiner.");
       navigate("/client/reservations");
     } catch (e) {
       toastError(apiErrorMessage(e, "La réservation n'a pas pu être créée (créneau indisponible ?)."));
@@ -35,7 +35,7 @@ export default function NewBooking() {
       <PageHeader
         eyebrow="Réservation"
         title="Réserver une salle"
-        subtitle="Votre demande sera examinée par la réception avant validation. Aucun paiement à cette étape."
+        subtitle="Votre demande sera examinée par le secrétariat général avant validation. Aucun paiement à cette étape."
       />
       {loading ? <Loader /> : (
         <BookingForm

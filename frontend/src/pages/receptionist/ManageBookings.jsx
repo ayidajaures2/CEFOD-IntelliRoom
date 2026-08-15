@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchAllBookings, validateBooking, rejectBooking, updateBooking } from "../../api/bookingApi";
+import { fetchAllBookings } from "../../api/bookingApi";
 import { useNotify } from "../../contexts/NotificationContext";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
@@ -7,21 +7,22 @@ import EmptyState from "../../components/common/EmptyState";
 import StatutBadge from "../../components/common/StatutBadge";
 import { formatDateTime } from "../../utils/formatDate";
 import { CATEGORIE_CLIENT_LABELS, STATUT_RESERVATION_LABELS } from "../../utils/constants";
-import { apiErrorMessage } from "../../utils/apiError";
 import { LuRefreshCw } from "react-icons/lu";
 
 const FILTERS = ["", "en_attente", "validee", "confirmee", "annulee"];
 
+/**
+ * Lecture seule — la réceptionniste ne valide plus les demandes (c'est le
+ * rôle du SG depuis la refonte, voir pages/sg/ManageBookings.jsx). Cette
+ * page sert uniquement à consulter l'état des réservations pour orienter
+ * les clients et répondre à leurs questions.
+ */
 export default function ManageBookings() {
-  const { success, error: toastError } = useNotify();
+  const { error: toastError } = useNotify();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState("");
-
-  const [noteModal, setNoteModal] = useState(null);
-  const [noteText, setNoteText] = useState("");
-  const [savingNote, setSavingNote] = useState(false);
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
@@ -43,49 +44,12 @@ export default function ManageBookings() {
     load();
   }, [load]);
 
-  const act = async (fn, b, message) => {
-    try {
-      await fn(b.id_reservation);
-      success(message);
-      load({ silent: true });
-    } catch (e) {
-      toastError(apiErrorMessage(e, "Action impossible."));
-    }
-  };
-
-  const openNote = (b) => {
-    setNoteModal(b);
-    setNoteText(b.note_interne ?? "");
-  };
-
-  const closeNote = () => {
-    if (savingNote) return;
-    setNoteModal(null);
-    setNoteText("");
-  };
-
-  const saveNote = async () => {
-    if (!noteModal) return;
-    setSavingNote(true);
-    try {
-      await updateBooking(noteModal.id_reservation, { note_interne: noteText.trim() || null });
-      success("Note enregistrée.");
-      setNoteModal(null);
-      setNoteText("");
-      load({ silent: true });
-    } catch (e) {
-      toastError(apiErrorMessage(e, "Impossible d'enregistrer la note."));
-    } finally {
-      setSavingNote(false);
-    }
-  };
-
   return (
     <>
       <PageHeader
         eyebrow="Réception"
-        title="Demandes de réservation"
-        subtitle="Vérifiez la disponibilité et la catégorie du client avant de valider. Le client paie après validation."
+        title="Réservations"
+        subtitle="Consultation seule. La validation des demandes est faite par le Secrétariat Général."
         actions={
           <button
             className="btn-outline flex items-center gap-1.5"
@@ -114,7 +78,7 @@ export default function ManageBookings() {
 
       {loading && <Loader />}
       {!loading && bookings.length === 0 && (
-        <EmptyState title="Aucune réservation" hint="Rien à traiter pour ce filtre." />
+        <EmptyState title="Aucune réservation" hint="Rien à afficher pour ce filtre." />
       )}
 
       {!loading && bookings.length > 0 && (
@@ -122,7 +86,7 @@ export default function ManageBookings() {
           <table className="table-base">
             <thead>
               <tr>
-                <th>Client</th><th>Catégorie déclarée</th><th>Salle</th><th>Période</th><th>Motif</th><th>Statut</th><th className="text-right">Actions</th>
+                <th>Client</th><th>Catégorie déclarée</th><th>Salle</th><th>Période</th><th>Motif</th><th>Statut</th>
               </tr>
             </thead>
             <tbody>
@@ -134,67 +98,10 @@ export default function ManageBookings() {
                   <td className="text-ink/60">{formatDateTime(b.date_debut)}<br />→ {formatDateTime(b.date_fin)}</td>
                   <td className="max-w-44 truncate text-ink/60">{b.motif}</td>
                   <td><StatutBadge statut={b.statut_effectif ?? b.statut} /></td>
-                  <td className="text-right">
-                    <div className="flex justify-end gap-2">
-                      {b.statut === "en_attente" && (
-                        <>
-                          <button className="btn-primary px-3 py-1.5 text-xs" onClick={() => act(validateBooking, b, "Réservation validée.")}>Valider</button>
-                          <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => window.confirm("Refuser cette demande ?") && act(rejectBooking, b, "Demande refusée.")}>Refuser</button>
-                        </>
-                      )}
-                      <button
-                        className="btn-outline relative px-3 py-1.5 text-xs"
-                        onClick={() => openNote(b)}
-                        title={b.note_interne ? "Modifier la note interne" : "Ajouter une note interne"}
-                      >
-                        Note
-                        {b.note_interne && (
-                          <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent" />
-                        )}
-                      </button>
-                    </div>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {noteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-          onClick={closeNote}
-        >
-          <div
-            className="card w-full max-w-md bg-surface p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="mb-1 font-display text-lg font-bold">Note interne</h2>
-            <p className="mb-3 text-sm text-ink/50">
-              {noteModal.client ? `${noteModal.client.prenom} ${noteModal.client.nom}` : `#${noteModal.id_client}`}
-              {" — "}
-              {noteModal.salle?.nom_salle ?? `#${noteModal.id_salle}`}
-            </p>
-            <textarea
-              className="field min-h-32 w-full resize-y focus:!border-ink/15 focus:!ring-0 focus:!outline-none"
-              placeholder="Ex : client déjà venu, prévoir chaises supplémentaires, doute sur la catégorie déclarée..."
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              maxLength={1000}
-              autoFocus
-            />
-            <p className="mt-1 text-right text-xs text-ink/40">{noteText.length}/1000</p>
-            <p className="mb-4 text-xs text-ink/40">Visible par la réception et l'administration uniquement.</p>
-            <div className="flex justify-end gap-2">
-              <button className="btn-outline px-3 py-1.5 text-sm" onClick={closeNote} disabled={savingNote}>
-                Annuler
-              </button>
-              <button className="btn-primary px-3 py-1.5 text-sm" onClick={saveNote} disabled={savingNote}>
-                {savingNote ? "Enregistrement..." : "Enregistrer"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </>

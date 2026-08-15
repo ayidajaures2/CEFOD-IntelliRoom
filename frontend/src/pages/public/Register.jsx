@@ -2,13 +2,15 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useNotify } from "../../contexts/NotificationContext";
-import { CATEGORIES_CLIENT } from "../../utils/constants";
+import { SOUS_CATEGORIES_CLIENT } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
 
 /**
  * Inscription CLIENT uniquement : aucun champ `role` n'est envoyé
- * (forcé à `client` côté serveur — CLAUDE.md §5).
- * `categorie_client` est obligatoire : elle détermine la grille tarifaire.
+ * (forcé à `client` côté serveur).
+ * `sous_categorie_client` est obligatoire (les 7 valeurs de la fiche
+ * papier) — c'est ce que le client choisit réellement. Le palier tarifaire
+ * `categorie_client` est dérivé automatiquement côté backend, jamais saisi.
  */
 export default function Register() {
   const { register } = useAuth();
@@ -17,13 +19,13 @@ export default function Register() {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     nom: "", prenom: "", email: "", telephone: "",
-    categorie_client: "", password: "", password_confirmation: "",
+    sous_categorie_client: "", password: "", password_confirmation: "",
   });
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const canSubmit =
-    form.nom && form.prenom && form.email && form.categorie_client &&
+    form.nom && form.prenom && form.email && form.sous_categorie_client &&
     form.password.length >= 8 && form.password === form.password_confirmation;
 
   const handleSubmit = async () => {
@@ -58,7 +60,9 @@ export default function Register() {
           </div>
         </div>
         <div>
-          <label className="field-label" htmlFor="email">Adresse e-mail</label>
+          <label className="field-label" htmlFor="email">
+            Adresse e-mail <span className="font-normal text-ink/40">(définitive, non modifiable ensuite)</span>
+          </label>
           <input id="email" type="email" className="field" value={form.email} onChange={set("email")} autoComplete="email" />
         </div>
         <div>
@@ -67,9 +71,9 @@ export default function Register() {
         </div>
         <div>
           <label className="field-label" htmlFor="categorie">Catégorie de votre organisation</label>
-          <select id="categorie" className="field" value={form.categorie_client} onChange={set("categorie_client")}>
+          <select id="categorie" className="field" value={form.sous_categorie_client} onChange={set("sous_categorie_client")}>
             <option value="" disabled>Choisir une catégorie…</option>
-            {CATEGORIES_CLIENT.map((c) => (
+            {SOUS_CATEGORIES_CLIENT.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
           </select>

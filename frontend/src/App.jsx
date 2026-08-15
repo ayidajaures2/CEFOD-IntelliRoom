@@ -31,6 +31,16 @@ import ConversationDetail from "./pages/receptionist/ConversationDetail";
 import ReceptionistInvoices from "./pages/receptionist/Invoices";
 import ReceptionistClients from "./pages/receptionist/Clients";
 
+// SG (Secrétariat Général)
+import SgDashboard from "./pages/sg/SgDashboard";
+import SgManageBookings from "./pages/sg/ManageBookings";
+import SgClients from "./pages/sg/Clients";
+
+// Comptabilité
+import ComptabiliteDashboard from "./pages/accounting/ComptabiliteDashboard";
+import ValidatePayments from "./pages/accounting/ValidatePayments";
+import ComptabiliteInvoices from "./pages/accounting/Invoices";
+
 // Caissier
 import CashierDashboard from "./pages/cashier/CashierDashboard";
 import CashierPayments from "./pages/cashier/Invoices";
@@ -39,6 +49,7 @@ import CashierInvoices from "./pages/cashier/CashierInvoices"; // ✅ AJOUT
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ManageRooms from "./pages/admin/ManageRooms";
+import ManageServices from "./pages/admin/ManageServices";
 import ManageUsers from "./pages/admin/ManageUsers";
 import AdminInvoices from "./pages/admin/Invoices";
 import Reports from "./pages/admin/Reports";
@@ -87,6 +98,28 @@ export default function App() {
         </Route>
       </Route>
 
+      {/* Espace SG (Secrétariat Général) — pas de messagerie client, c'est le
+          rôle exclusif de la réception. Le SG se concentre sur la validation
+          des demandes de réservation. */}
+      <Route element={<PrivateRoute roles={[ROLES.SG, ROLES.ADMIN]} />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/sg" element={<SgDashboard />} />
+          <Route path="/sg/reservations" element={<SgManageBookings />} />
+          <Route path="/sg/clients" element={<SgClients />} />
+          <Route path="/sg/profil" element={<Profile />} />
+        </Route>
+      </Route>
+
+      {/* Espace Comptabilité */}
+      <Route element={<PrivateRoute roles={[ROLES.COMPTABILITE, ROLES.ADMIN]} />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/comptabilite" element={<ComptabiliteDashboard />} />
+          <Route path="/comptabilite/paiements" element={<ValidatePayments />} />
+          <Route path="/comptabilite/factures" element={<ComptabiliteInvoices />} />
+          <Route path="/comptabilite/profil" element={<Profile />} />
+        </Route>
+      </Route>
+
       {/* Espace caissier */}
       <Route element={<PrivateRoute roles={[ROLES.CAISSIER, ROLES.ADMIN]} />}>
         <Route element={<DashboardLayout />}>
@@ -102,6 +135,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/salles" element={<ManageRooms />} />
+          <Route path="/admin/services" element={<ManageServices />} />
           <Route path="/admin/utilisateurs" element={<ManageUsers />} />
           <Route path="/admin/factures" element={<AdminInvoices />} />
           <Route path="/admin/rapports" element={<Reports />} />

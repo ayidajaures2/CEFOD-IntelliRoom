@@ -123,7 +123,7 @@ export default function Home() {
           {[
             ["Choisir", "Parcourez le catalogue : capacité, équipements et tarif selon votre catégorie."],
             ["Demander", "Envoyez votre demande de réservation avec les dates et le motif — sans payer."],
-            ["Valider", "La réceptionniste confirme la disponibilité ; vous voyez le prix final avant de payer."],
+            ["Valider", "Le secrétariat général confirme la disponibilité ; vous voyez le prix final avant de payer."],
             ["Payer", "En espèces à la caisse, ou en ligne via Moov Money / Airtel Money. Facture PDF incluse."],
           ].map(([title, text], i) => (
             <article key={title} className="card p-5">

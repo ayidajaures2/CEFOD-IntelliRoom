@@ -8,12 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('Notification', function (Blueprint $table) {
+        Schema::create('notification', function (Blueprint $table) {
             $table->id('id_notification');
-            $table->foreignId('id_utilisateur')->constrained('Utilisateur', 'id_utilisateur');
+            $table->foreignId('id_utilisateur')->constrained('utilisateur', 'id_utilisateur');
             $table->string('titre', 100);
             $table->text('contenu');
-            $table->enum('type', ['confirmation', 'rappel', 'annulation', 'info']);
+            // varchar libre, PAS un ENUM : le code utilise en réalité
+            // reservation / validation / annulation / paiement / info, et
+            // NotificationController::broadcast() accepte n'importe quelle
+            // valeur envoyée par l'admin (max 50 caractères). Un ENUM figé
+            // ici tronque silencieusement (ou plante en mode strict) dès
+            // qu'une valeur hors liste est insérée — déjà rencontré une
+            // fois avec faq.categorie, même cause.
+            $table->string('type', 50)->default('info');
             $table->boolean('est_lu')->default(false);
             $table->timestamp('date_creation')->useCurrent();
         });
@@ -21,6 +28,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('Notification');
+        Schema::dropIfExists('notification');
     }
 };

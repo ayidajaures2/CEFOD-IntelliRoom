@@ -2,14 +2,11 @@ import api from "./client";
 import { ENDPOINTS } from "./endpoints";
 
 /**
- * Seuls les rôles client et admin ont des routes de notifications
- * dans api.php : pour les autres on renvoie une liste vide sans
- * appel réseau (la cloche reste simplement vide).
+ * Les routes /notifications sont communes à TOUS les rôles connectés
+ * (déclarées hors des groupes préfixés par rôle dans api.php) — donc
+ * toujours un vrai appel réseau, y compris pour sg/comptabilite.
  */
-export const fetchNotifications = () => {
-  const path = ENDPOINTS.notifications.list();
-  return path ? api.get(path) : Promise.resolve({ data: [] });
-};
+export const fetchNotifications = () => api.get(ENDPOINTS.notifications.list());
 
 export const markNotificationRead = (id) => api.put(ENDPOINTS.notifications.read(id));
 

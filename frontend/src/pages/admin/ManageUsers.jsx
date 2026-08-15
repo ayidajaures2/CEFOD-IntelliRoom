@@ -5,25 +5,34 @@ import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
 import Modal from "../../components/common/Modal";
-import { CATEGORIES_CLIENT, CATEGORIE_CLIENT_LABELS, ROLES, ROLE_LABELS } from "../../utils/constants";
+import {
+  SOUS_CATEGORIES_CLIENT,
+  SOUS_CATEGORIE_CLIENT_LABELS,
+  CATEGORIE_CLIENT_LABELS,
+  ROLES,
+  ROLE_LABELS,
+} from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
 import { LuRefreshCw } from "react-icons/lu";
 
 const EMPTY = {
   nom: "", prenom: "", email: "", telephone: "",
-  role: ROLES.RECEPTIONNISTE, categorie_client: "", password: "", password_confirmation: "",
+  role: ROLES.RECEPTIONNISTE, sous_categorie_client: "", password: "", password_confirmation: "",
 };
 
 /**
  * Gestion des comptes (AdminController). C'est ICI — et uniquement ici —
- * que la `categorie_client` d'un client peut être corrigée, et que les
- * comptes réceptionniste/caissier/admin sont créés (CLAUDE.md §3 & §5).
+ * que la sous_categorie_client d'un client peut être corrigée (le palier
+ * tarifaire categorie_client est dérivé automatiquement côté backend, ne se
+ * saisit jamais directement), et que les comptes du personnel sont créés
+ * (SG, comptabilité, réceptionniste, caissier, admin — CLAUDE.md §1 & §5).
+ * L'email n'est JAMAIS éditable ici : immuable après création, pour tous
+ * les rôles, y compris depuis cet écran admin.
  */
 export default function ManageUsers() {
   const { success, error: toastError } = useNotify();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  // AJOUT : distingue le chargement plein écran du refresh manuel (bouton)
   const [refreshing, setRefreshing] = useState(false);
   const [roleFilter, setRoleFilter] = useState("");
   const [editing, setEditing] = useState(null);
@@ -50,7 +59,7 @@ export default function ManageUsers() {
   const openEdit = (u) => {
     setForm({
       nom: u.nom, prenom: u.prenom, email: u.email, telephone: u.telephone ?? "",
-      role: u.role, categorie_client: u.categorie_client ?? "",
+      role: u.role, sous_categorie_client: u.sous_categorie_client ?? "",
       password: "", password_confirmation: "",
     });
     setEditing(u);
@@ -60,8 +69,12 @@ export default function ManageUsers() {
 
   const submit = async () => {
     setBusy(true);
-    const payload = { ...form };
-    if (payload.role !== ROLES.CLIENT) payload.categorie_client = null;
+    // email volontairement absent du payload : immuable, jamais envoyé même
+    // en édition (le backend l'ignorerait de toute façon, mais autant ne
+    // pas prétendre que ce champ est modifiable côté formulaire).
+    const { email, ...rest } = form;
+    const payload = { ...rest };
+    if (payload.role !== ROLES.CLIENT) payload.sous_categorie_client = null;
     if (editing && !payload.password) {
       delete payload.password;
       delete payload.password_confirmation;
@@ -71,7 +84,7 @@ export default function ManageUsers() {
         await updateUser(editing.id_utilisateur, payload);
         success("Utilisateur mis à jour.");
       } else {
-        await createUser(payload);
+        await createUser(form); // à la création, l'email est requis
         success("Compte créé.");
       }
       setEditing(null);
@@ -91,7 +104,7 @@ export default function ManageUsers() {
       success("Compte supprimé.");
       load({ silent: true });
     } catch (e) {
-      toastError(apiErrorMessage(e, "Suppression impossible : des réservations sont liées à ce compte."));
+      toastError(apiErrorMessage(e, "Suppression impossible : des réservations ou paiements sont liés à ce compte."));
     }
   };
 
@@ -103,10 +116,9 @@ export default function ManageUsers() {
       <PageHeader
         eyebrow="Administration"
         title="Utilisateurs"
-        subtitle="Créez les comptes du personnel et corrigez la catégorie tarifaire des clients."
+        subtitle="Créez les comptes du personnel et corrigez la sous-catégorie déclarée des clients. L'e-mail est immuable après création."
         actions={
           <>
-            {/* AJOUT : bouton de rafraîchissement manuel (pas de polling sur cette page) */}
             <button
               className="btn-outline flex items-center gap-1.5"
               onClick={() => load({ silent: true })}
@@ -138,7 +150,7 @@ export default function ManageUsers() {
         <div className="card overflow-x-auto">
           <table className="table-base">
             <thead>
-              <tr><th>Nom</th><th>E-mail</th><th>Téléphone</th><th>Rôle</th><th>Catégorie tarifaire</th><th className="text-right">Actions</th></tr>
+              <tr><th>Nom</th><th>E-mail</th><th>Téléphone</th><th>Rôle</th><th>Catégorie</th><th className="text-right">Actions</th></tr>
             </thead>
             <tbody>
               {filtered.map((u) => (
@@ -155,7 +167,11 @@ export default function ManageUsers() {
                       {ROLE_LABELS[u.role] ?? u.role}
                     </span>
                   </td>
-                  <td className="text-ink/60">{CATEGORIE_CLIENT_LABELS[u.categorie_client] ?? "—"}</td>
+                  <td className="text-ink/60">
+                    {SOUS_CATEGORIE_CLIENT_LABELS[u.sous_categorie_client]
+                      ?? CATEGORIE_CLIENT_LABELS[u.categorie_client]
+                      ?? "—"}
+                  </td>
                   <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => openEdit(u)}>Modifier</button>
@@ -186,8 +202,17 @@ export default function ManageUsers() {
             </div>
           </div>
           <div>
-            <label className="field-label" htmlFor="u-email">E-mail</label>
-            <input id="u-email" type="email" className="field" value={form.email} onChange={set("email")} />
+            <label className="field-label" htmlFor="u-email">
+              E-mail {editing && <span className="font-normal text-ink/40">(immuable, non modifiable)</span>}
+            </label>
+            <input
+              id="u-email"
+              type="email"
+              className="field disabled:bg-ink/5 disabled:text-ink/40"
+              value={form.email}
+              onChange={set("email")}
+              disabled={Boolean(editing)}
+            />
           </div>
           <div>
             <label className="field-label" htmlFor="u-tel">Téléphone</label>
@@ -202,10 +227,10 @@ export default function ManageUsers() {
             </div>
             {isClientRole && (
               <div>
-                <label className="field-label" htmlFor="u-cat">Catégorie tarifaire</label>
-                <select id="u-cat" className="field" value={form.categorie_client} onChange={set("categorie_client")}>
+                <label className="field-label" htmlFor="u-cat">Sous-catégorie (fiche papier)</label>
+                <select id="u-cat" className="field" value={form.sous_categorie_client} onChange={set("sous_categorie_client")}>
                   <option value="" disabled>Choisir…</option>
-                  {CATEGORIES_CLIENT.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  {SOUS_CATEGORIES_CLIENT.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
             )}
@@ -221,7 +246,7 @@ export default function ManageUsers() {
             </div>
           </div>
           <button className="btn-primary w-full" onClick={submit}
-            disabled={busy || !form.nom || !form.email || (isClientRole && !form.categorie_client) || (!editing && form.password.length < 8) || form.password !== form.password_confirmation}>
+            disabled={busy || !form.nom || (!editing && !form.email) || (isClientRole && !form.sous_categorie_client) || (!editing && form.password.length < 8) || form.password !== form.password_confirmation}>
             {busy ? "Enregistrement…" : editing ? "Enregistrer" : "Créer le compte"}
           </button>
         </div>

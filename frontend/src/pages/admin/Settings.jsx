@@ -15,7 +15,7 @@ import {
 } from "../../api/FaqApi";
 
 /**
- * Page « Paramètres » de l'admin (v2, refonte 22/07/2026).
+ * Page « Paramètres » de l'admin.
  *
  * Trois onglets :
  *   1) FAQ           → CRUD complet des questions (par catégorie).
@@ -387,7 +387,9 @@ const NOTIF_ROLES = [
   { value: "",              label: "Tous les utilisateurs" },
   { value: "client",        label: "Clients" },
   { value: "receptionniste",label: "Réception" },
+  { value: "sg",            label: "Secrétariat Général" },
   { value: "caissier",      label: "Caisse" },
+  { value: "comptabilite",  label: "Comptabilité" },
   { value: "admin",         label: "Administrateurs" },
 ];
 

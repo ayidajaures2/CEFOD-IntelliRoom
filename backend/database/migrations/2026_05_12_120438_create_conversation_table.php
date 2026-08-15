@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('Conversation', function (Blueprint $table) {
+        Schema::create('conversation', function (Blueprint $table) {
             $table->id('id_conversation');
-            $table->foreignId('id_utilisateur')->nullable()->constrained('Utilisateur', 'id_utilisateur');
+            $table->foreignId('id_utilisateur')->nullable()->constrained('utilisateur', 'id_utilisateur');
             $table->timestamp('debut_conversation')->useCurrent();
             $table->timestamp('fin_conversation')->nullable();
         });
@@ -18,6 +18,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('Conversation');
+        Schema::dropIfExists('conversation');
     }
 };

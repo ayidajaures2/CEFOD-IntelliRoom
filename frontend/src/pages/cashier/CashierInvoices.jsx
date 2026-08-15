@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchInvoices, downloadInvoicePdf } from "../../api/invoiceApi";
+import { fetchInvoices } from "../../api/invoiceApi";
 import { extractList } from "../../utils/extract";
 import { useNotify } from "../../contexts/NotificationContext";
 import PageHeader from "../../components/common/PageHeader";
@@ -9,7 +9,12 @@ import { formatDate } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
 import { MODE_PAIEMENT_LABELS } from "../../utils/constants";
 
-/** ✅ AJOUT — Consultation des factures émises (caissier). */
+/**
+ * Consultation des factures émises (caissier) — lecture seule.
+ * ⚠ Pas de bouton téléchargement : InvoiceController::canDownload() exclut
+ * le caissier (seuls admin/comptabilité téléchargent, plus le client pour
+ * les siennes).
+ */
 export default function CashierInvoices() {
   const { error: toastError } = useNotify();
   const [invoices, setInvoices] = useState([]);
@@ -32,7 +37,11 @@ export default function CashierInvoices() {
 
   return (
     <>
-      <PageHeader eyebrow="Caisse" title="Factures" />
+      <PageHeader
+        eyebrow="Caisse"
+        title="Factures"
+        subtitle="Consultation seule. Le téléchargement est réservé à l'administration et à la comptabilité."
+      />
       <input
         className="field mb-4 max-w-sm"
         placeholder="Rechercher (n°, client ou mode)…"
@@ -52,7 +61,6 @@ export default function CashierInvoices() {
                 <th>Émise le</th>
                 <th>Montant</th>
                 <th>Mode</th>
-                <th className="text-right">PDF</th>
               </tr>
             </thead>
             <tbody>
@@ -66,14 +74,6 @@ export default function CashierInvoices() {
                     <td>{formatDate(f.date_emission)}</td>
                     <td>{formatMoney(f.paiement?.montant)}</td>
                     <td className="text-ink/60">{MODE_PAIEMENT_LABELS[modePaiement] ?? modePaiement ?? "—"}</td>
-                    <td className="text-right">
-                      <button
-                        onClick={() => downloadInvoicePdf(f.id_facture, f.numero_facture).catch(() => toastError("Téléchargement impossible."))}
-                        className="btn-dark px-3 py-1.5 text-xs"
-                      >
-                        Télécharger
-                      </button>
-                    </td>
                   </tr>
                 );
               })}

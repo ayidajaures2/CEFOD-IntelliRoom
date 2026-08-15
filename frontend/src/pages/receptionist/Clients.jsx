@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { fetchClients } from "../../api/receptionistApi";
 import { extractList } from "../../utils/extract";
 import { useNotify } from "../../contexts/NotificationContext";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
-import { CATEGORIE_CLIENT_LABELS } from "../../utils/constants";
+import { CATEGORIE_CLIENT_LABELS, SOUS_CATEGORIE_CLIENT_LABELS } from "../../utils/constants";
 import { formatDate } from "../../utils/formatDate";
+import { whatsappLink } from "../../utils/whatsapp";
+import { LuMessageSquare, LuPhone } from "react-icons/lu";
 
 /** Consultation des comptes clients (réception, lecture seule — voir userApi.js pour la gestion admin). */
 export default function Clients() {
@@ -48,7 +51,7 @@ export default function Clients() {
         <div className="card overflow-x-auto">
           <table className="table-base">
             <thead>
-              <tr><th>Nom</th><th>E-mail</th><th>Téléphone</th><th>Catégorie tarifaire</th><th>Inscrit le</th></tr>
+              <tr><th>Nom</th><th>E-mail</th><th>Téléphone</th><th>Catégorie</th><th>Inscrit le</th><th className="text-right">Contact</th></tr>
             </thead>
             <tbody>
               {filtered.map((c) => (
@@ -56,8 +59,32 @@ export default function Clients() {
                   <td className="font-medium">{c.prenom} {c.nom}</td>
                   <td className="text-ink/60">{c.email}</td>
                   <td className="text-ink/60">{c.telephone ?? "—"}</td>
-                  <td className="text-ink/60">{CATEGORIE_CLIENT_LABELS[c.categorie_client] ?? "—"}</td>
+                  <td className="text-ink/60">
+                    {SOUS_CATEGORIE_CLIENT_LABELS[c.sous_categorie_client] ?? CATEGORIE_CLIENT_LABELS[c.categorie_client] ?? "—"}
+                  </td>
                   <td className="text-ink/60">{formatDate(c.date_creation)}</td>
+                  <td className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Link
+                        to={`/reception/conversations?q=${encodeURIComponent(c.prenom + " " + c.nom)}`}
+                        className="btn-outline px-2.5 py-1.5 text-xs"
+                        title="Reprendre la conversation avec ce client"
+                      >
+                        <LuMessageSquare size={14} />
+                      </Link>
+                      {c.telephone && (
+                        <a
+                          href={whatsappLink(c.telephone)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-outline px-2.5 py-1.5 text-xs"
+                          title="Contacter sur WhatsApp"
+                        >
+                          <LuPhone size={14} />
+                        </a>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

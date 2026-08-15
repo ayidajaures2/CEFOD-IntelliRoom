@@ -3,13 +3,15 @@ import { ENDPOINTS } from "./endpoints";
 
 /**
  * Le rôle n'est JAMAIS envoyé à l'inscription : il est forcé à `client`
- * côté serveur (faille corrigée — CLAUDE.md §5).
- * `categorie_client` est obligatoire (grille tarifaire).
+ * côté serveur (faille corrigée).
+ * `sous_categorie_client` est obligatoire (les 7 valeurs de la fiche
+ * papier) — le palier tarifaire categorie_client est dérivé automatiquement
+ * côté backend, jamais saisi directement.
  */
 export const register = (payload) => {
-  const { nom, prenom, email, telephone, password, password_confirmation, categorie_client } = payload;
+  const { nom, prenom, email, telephone, password, password_confirmation, sous_categorie_client } = payload;
   return api.post(ENDPOINTS.auth.register, {
-    nom, prenom, email, telephone, password, password_confirmation, categorie_client,
+    nom, prenom, email, telephone, password, password_confirmation, sous_categorie_client,
   });
 };
 

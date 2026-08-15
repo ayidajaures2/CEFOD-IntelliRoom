@@ -11,6 +11,10 @@ class BusinessHours
      * Plages ouvertes indexées par jour ISO (1 = lundi … 7 = dimanche).
      * Chaque entrée : [heure_ouverture, heure_fermeture] en "H:i".
      * Un jour absent = fermé.
+     *
+     * Le CEFOD physique est fermé le dimanche (règlement papier), mais les
+     * réservations via l'application sont désormais acceptées 7j/7, mêmes
+     * horaires — décision explicite prise pour l'app (§ conception).
      */
     public const HOURS = [
         1 => ['08:00', '18:00'], // lundi
@@ -19,7 +23,7 @@ class BusinessHours
         4 => ['08:00', '18:00'], // jeudi
         5 => ['08:00', '18:00'], // vendredi
         6 => ['08:00', '18:00'], // samedi
-        // 7 (dimanche) absent → fermé
+        7 => ['08:00', '18:00'], // dimanche
     ];
 
     // -----------------------------------------------------------------
@@ -98,7 +102,7 @@ class BusinessHours
 
         $cursor = $dt->copy();
 
-        // On cherche sur 8 jours max (couvre un dimanche entier)
+        // On cherche sur 8 jours max (couvre une semaine entière)
         for ($i = 0; $i < 8; $i++) {
             $dow = $cursor->dayOfWeekIso;
 
@@ -164,6 +168,6 @@ class BusinessHours
      */
     public static function humanSchedule(): string
     {
-        return "Lundi–Samedi : 08 h – 18 h · Dimanche : fermé";
+        return "Tous les jours (Lundi–Dimanche) : 08 h – 18 h";
     }
 }

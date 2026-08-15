@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchInvoices, downloadInvoicePdf } from "../../api/invoiceApi";
+import { fetchInvoices } from "../../api/invoiceApi";
 import { extractList } from "../../utils/extract";
 import { useNotify } from "../../contexts/NotificationContext";
 import PageHeader from "../../components/common/PageHeader";
@@ -8,7 +8,11 @@ import EmptyState from "../../components/common/EmptyState";
 import { formatDate } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
 
-/** Consultation des factures émises (réception). */
+/**
+ * Consultation des factures émises (réception) — lecture seule.
+ * exclut la réceptionniste (seuls admin/comptabilité téléchargent, plus le
+ * client pour les siennes). L'exposer renverrait un 403 systématique.
+ */
 export default function ReceptionistInvoices() {
   const { error: toastError } = useNotify();
   const [invoices, setInvoices] = useState([]);
@@ -31,7 +35,11 @@ export default function ReceptionistInvoices() {
 
   return (
     <>
-      <PageHeader eyebrow="Réception" title="Factures" />
+      <PageHeader
+        eyebrow="Réception"
+        title="Factures"
+        subtitle="Consultation seule. Le téléchargement est réservé à l'administration et à la comptabilité."
+      />
       <input
         className="field mb-4 max-w-sm"
         placeholder="Rechercher (n° ou client)…"
@@ -45,7 +53,7 @@ export default function ReceptionistInvoices() {
         <div className="card overflow-x-auto">
           <table className="table-base">
             <thead>
-              <tr><th>N°</th><th>Client</th><th>Émise le</th><th>Montant</th><th className="text-right">PDF</th></tr>
+              <tr><th>N°</th><th>Client</th><th>Émise le</th><th>Montant</th><th>Mode</th></tr>
             </thead>
             <tbody>
               {filtered.map((f) => {
@@ -56,14 +64,7 @@ export default function ReceptionistInvoices() {
                     <td>{client ? `${client.prenom} ${client.nom}` : "—"}</td>
                     <td>{formatDate(f.date_emission)}</td>
                     <td>{formatMoney(f.paiement?.montant)}</td>
-                    <td className="text-right">
-                      <button
-                        onClick={() => downloadInvoicePdf(f.id_facture, f.numero_facture).catch(() => toastError("Téléchargement impossible."))}
-                        className="btn-dark px-3 py-1.5 text-xs"
-                      >
-                        Télécharger
-                      </button>
-                    </td>
+                    <td className="text-ink/60">{f.paiement?.mode_paiement ?? "—"}</td>
                   </tr>
                 );
               })}

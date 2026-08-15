@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchPendingPayments, recordPayment, validatePayment } from "../../api/paymentApi";
+import { fetchPendingPayments, recordPayment } from "../../api/paymentApi";
 import { fetchAllBookings } from "../../api/bookingApi";
 import { useNotify } from "../../contexts/NotificationContext";
 import PageHeader from "../../components/common/PageHeader";
@@ -9,11 +9,16 @@ import StatutBadge from "../../components/common/StatutBadge";
 import Modal from "../../components/common/Modal";
 import { formatMoney } from "../../utils/formatMoney";
 import { formatDateTime } from "../../utils/formatDate";
-import { MODES_PAIEMENT, MODE_PAIEMENT_LABELS } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
 import { extractList } from "../../utils/extract";
 import { LuRefreshCw } from "react-icons/lu";
 
+/**
+ * Le caissier n'encaisse QUE les espèces (chèque/virement sont enregistrés
+ * directement par la comptabilité, voir pages/accounting/). Il ne valide
+ * plus rien lui-même — l'encaissement passe au statut "encaisse" et attend
+ * la validation de la comptabilité (pages/accounting/ValidatePayments.jsx).
+ */
 export default function CashierPayments() {
   const { success, error: toastError } = useNotify();
   const [payments, setPayments] = useState([]);
@@ -21,7 +26,7 @@ export default function CashierPayments() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [collecting, setCollecting] = useState(null);
-  const [form, setForm] = useState({ montant: "", mode_paiement: "especes", reference: "" });
+  const [form, setForm] = useState({ montant: "", reference: "" });
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async ({ silent = false } = {}) => {
@@ -43,7 +48,7 @@ export default function CashierPayments() {
 
   const openCollect = (b) => {
     setCollecting(b);
-    setForm({ montant: b.montant_du ?? "", mode_paiement: "especes", reference: "" });
+    setForm({ montant: b.montant_du ?? "", reference: "" });
   };
 
   const submitCollect = async () => {
@@ -52,10 +57,9 @@ export default function CashierPayments() {
       await recordPayment({
         id_reservation: collecting.id_reservation,
         montant: Number(form.montant),
-        mode_paiement: form.mode_paiement,
-        reference: form.reference || undefined,
+        reference: form.reference.trim(),
       });
-      success("Paiement enregistré.");
+      success("Paiement encaissé. En attente de validation par la comptabilité.");
       setCollecting(null);
       load({ silent: true });
     } catch (e) {
@@ -65,21 +69,12 @@ export default function CashierPayments() {
     }
   };
 
-  const validate = async (p) => {
-    try {
-      await validatePayment(p.id_paiement);
-      success("Paiement validé — réservation confirmée, facture émise.");
-      load({ silent: true });
-    } catch (e) {
-      toastError(apiErrorMessage(e, "Validation impossible."));
-    }
-  };
-
   return (
     <>
       <PageHeader
         eyebrow="Caisse"
-        title="Paiements"
+        title="Paiements — espèces"
+        subtitle="Encaissement présentiel uniquement. La comptabilité valide ensuite chaque encaissement avant confirmation de la réservation."
         actions={
           <button
             className="btn-outline flex items-center gap-1.5"
@@ -116,7 +111,7 @@ export default function CashierPayments() {
                           {formatDateTime(b.date_debut)} → {formatDateTime(b.date_fin)}
                         </td>
                         <td className="text-right">
-                          <button className="btn-primary px-3 py-1.5 text-xs" onClick={() => openCollect(b)}>Encaisser</button>
+                          <button className="btn-primary px-3 py-1.5 text-xs" onClick={() => openCollect(b)}>Encaisser (espèces)</button>
                         </td>
                       </tr>
                     ))}
@@ -127,27 +122,21 @@ export default function CashierPayments() {
           </section>
 
           <section>
-            <h2 className="mb-3 font-display text-lg font-bold">Paiements enregistrés</h2>
+            <h2 className="mb-3 font-display text-lg font-bold">Encaissements récents</h2>
             {payments.length === 0 ? (
-              <EmptyState title="Aucun paiement" />
+              <EmptyState title="Aucun encaissement" />
             ) : (
               <div className="card overflow-x-auto">
                 <table className="table-base">
                   <thead>
-                    <tr><th>Montant</th><th>Mode</th><th>Référence</th><th>Statut</th><th className="text-right">Action</th></tr>
+                    <tr><th>Montant</th><th>Référence</th><th>Statut</th></tr>
                   </thead>
                   <tbody>
                     {payments.map((p) => (
                       <tr key={p.id_paiement}>
                         <td className="font-medium">{formatMoney(p.montant)}</td>
-                        <td>{MODE_PAIEMENT_LABELS[p.mode_paiement] ?? p.mode_paiement}</td>
-                        <td className="font-mono text-xs">{p.reference ?? "—"}</td>
+                        <td className="font-mono text-xs">{p.reference}</td>
                         <td><StatutBadge statut={p.statut} /></td>
-                        <td className="text-right">
-                          {p.statut === "en_attente" && (
-                            <button className="btn-dark px-3 py-1.5 text-xs" onClick={() => validate(p)}>Valider</button>
-                          )}
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -158,7 +147,7 @@ export default function CashierPayments() {
         </div>
       )}
 
-      <Modal open={Boolean(collecting)} title="Encaisser un paiement" onClose={() => setCollecting(null)}>
+      <Modal open={Boolean(collecting)} title="Encaisser un paiement en espèces" onClose={() => setCollecting(null)}>
         {collecting && (
           <div className="space-y-4">
             <p className="text-sm text-ink/60">
@@ -166,33 +155,21 @@ export default function CashierPayments() {
               {collecting.salle?.nom_salle ?? `salle #${collecting.id_salle}`}
             </p>
             <div>
-              <label className="field-label" htmlFor="montant">Montant (FCFA)</label>
+              <label className="field-label" htmlFor="montant">Montant reçu (FCFA)</label>
               <input id="montant" type="number" min="0" className="field" value={form.montant}
                 onChange={(e) => setForm((f) => ({ ...f, montant: e.target.value }))} />
             </div>
             <div>
-              <span className="field-label">Mode de paiement</span>
-              <div className="grid grid-cols-3 gap-2">
-                {MODES_PAIEMENT.map((m) => (
-                  <button key={m.value}
-                    onClick={() => setForm((f) => ({ ...f, mode_paiement: m.value }))}
-                    className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
-                      form.mode_paiement === m.value ? "border-accent bg-accent text-paper" : "border-ink/15 hover:border-accent"
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="field-label" htmlFor="reference">Référence (optionnel)</label>
+              <label className="field-label" htmlFor="reference">Référence du reçu <span className="text-red-500">*</span></label>
               <input id="reference" className="field" value={form.reference}
                 onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
-                placeholder="N° de transaction Mobile Money…" />
+                placeholder="Numéro inscrit sur le reçu remis au client" required />
+              <p className="mt-1 text-xs text-ink/45">
+                Obligatoire et unique — c'est ce numéro que la comptabilité vérifiera avant de valider.
+              </p>
             </div>
-            <button className="btn-primary w-full" onClick={submitCollect} disabled={busy || !form.montant}>
-              {busy ? "Enregistrement…" : "Enregistrer le paiement"}
+            <button className="btn-primary w-full" onClick={submitCollect} disabled={busy || !form.montant || !form.reference.trim()}>
+              {busy ? "Enregistrement…" : "Enregistrer l'encaissement"}
             </button>
           </div>
         )}

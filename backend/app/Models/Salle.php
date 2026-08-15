@@ -64,8 +64,8 @@ class Salle extends Model
     }
 
     /**
-     * ✅ AJOUT — URL complète de la photo (ou null). Le frontend affiche
-     * directement image_url ; nécessite `php artisan storage:link`.
+     *AJOUT — URL complète de la photo (ou null). Le frontend affiche
+     *directement image_url ; nécessite `php artisan storage:link`.
      */
     public function getImageUrlAttribute()
     {

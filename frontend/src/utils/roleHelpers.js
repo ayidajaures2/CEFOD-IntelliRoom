@@ -4,6 +4,8 @@ import { ROLES } from "./constants";
 export const homePathForRole = (role) => {
   switch (role) {
     case ROLES.ADMIN: return "/admin";
+    case ROLES.SG: return "/sg";
+    case ROLES.COMPTABILITE: return "/comptabilite";
     case ROLES.RECEPTIONNISTE: return "/reception";
     case ROLES.CAISSIER: return "/caisse";
     case ROLES.CLIENT: return "/client";
@@ -12,4 +14,4 @@ export const homePathForRole = (role) => {
 };
 
 export const isStaff = (role) =>
-  [ROLES.ADMIN, ROLES.RECEPTIONNISTE, ROLES.CAISSIER].includes(role);
+  [ROLES.ADMIN, ROLES.SG, ROLES.COMPTABILITE, ROLES.RECEPTIONNISTE, ROLES.CAISSIER].includes(role);

@@ -1,20 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-  PieChart, Pie, Cell, Legend,
-} from "recharts";
 import { fetchStats } from "../../api/reportApi";
 import { fetchAllBookings } from "../../api/bookingApi";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
+import { DonutChart, BarsChart, ChartCard } from "../../components/common/Charts";
 import { STATUT_RESERVATION_LABELS } from "../../utils/constants";
-
-/* Palette imposée : dégradés de l'encre et de l'orange uniquement. */
-// AJOUT : le noir suit désormais le thème via var(--color-ink) — sinon il
-// reste noir pur en dark mode et devient quasi invisible sur le fond sombre.
-const COLORS = ["#f97316", "var(--color-ink)", "#c2410c", "#fdba74", "#525252"];
-// AJOUT : même logique pour le liseré de grille (invisible en dark mode avant).
-const GRID_STROKE = "color-mix(in srgb, var(--color-ink) 7%, transparent)";
 
 export default function Reports() {
   const [stats, setStats] = useState(null);
@@ -66,39 +56,13 @@ export default function Reports() {
       <PageHeader eyebrow="Administration" title="Rapports & statistiques" subtitle="Répartition des réservations par statut et par salle." />
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <section className="card p-5">
-          <h2 className="mb-4 font-display text-lg font-bold">Réservations par statut</h2>
-          {byStatus.length === 0 ? (
-            <p className="py-10 text-center text-sm text-ink/45">Pas encore de données.</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={byStatus} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100} paddingAngle={2}>
-                  {byStatus.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </section>
+        <ChartCard title="Réservations par statut">
+          <DonutChart data={byStatus} />
+        </ChartCard>
 
-        <section className="card p-5">
-          <h2 className="mb-4 font-display text-lg font-bold">Réservations par salle</h2>
-          {byRoom.length === 0 ? (
-            <p className="py-10 text-center text-sm text-ink/45">Pas encore de données.</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={byRoom}>
-                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="reservations" name="Réservations" fill="#f97316" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </section>
+        <ChartCard title="Réservations par salle">
+          <BarsChart data={byRoom} dataKey="reservations" xKey="name" name="Réservations" maxBarSize={48} barCategoryGap="35%" />
+        </ChartCard>
       </div>
     </>
   );

@@ -12,13 +12,26 @@ import { extractList } from "../../utils/extract";
  * Écran plein écran à projeter à l'accueil du CEFOD.
  * TOUJOURS sombre (indépendant du thème clair/sombre de l'app).
  * Polling 5 s ; repli sur /rooms si /rooms/occupation indisponible.
+ *
+ * Code couleur imposé par le cahier des charges : vert = libre,
+ * jaune = réservée, rouge = occupée. Appliqué UNIQUEMENT au point de
+ * statut, au badge et aux stats de synthèse (icône + barre) — le fond
+ * de chaque carte reste neutre, identique quel que soit le statut.
  */
 const TILE = {
-  libre:    "border-white/10 bg-white/[0.04]",
-  reservee: "border-accent/60 bg-accent/10",
-  occupee:  "border-transparent bg-gradient-to-br from-accent to-accent-dark text-white rt-pulse",
+  libre:    "border-emerald-400/60 bg-white/[0.04]",
+  reservee: "border-amber-400/70 bg-amber-500/25 text-white",
+  occupee:  "border-transparent bg-gradient-to-br from-red-500 to-accent-dark text-white rt-pulse",
 };
-const STATUT_DOT = { libre: "text-white/30", reservee: "text-accent", occupee: "text-white" };
+const STATUT_DOT = { libre: "text-emerald-400", reservee: "text-white", occupee: "text-red-400" };
+const STATUT_BADGE = {
+  libre: "bg-emerald-500 text-white",
+  reservee: "bg-amber-500 text-black",
+  occupee: "bg-red-500 text-white",
+};
+const SUMMARY_TONE = { libre: "text-emerald-400", reservee: "text-amber-400", occupee: "text-red-400" };
+const SUMMARY_ICON_BG = { libre: "bg-emerald-500/15", reservee: "bg-amber-400/15", occupee: "bg-red-500/15" };
+const SUMMARY_BAR = { libre: "bg-emerald-400", reservee: "bg-amber-400", occupee: "bg-red-500" };
 
 export default function RealTimeDisplay() {
   const [rooms, setRooms] = useState([]);
@@ -87,11 +100,11 @@ export default function RealTimeDisplay() {
       {/* ===== Barre de synthèse (compteurs + jauge) ===== */}
       <div className="grid gap-4 border-b border-white/10 px-6 py-5 sm:grid-cols-3 sm:px-10">
         <SummaryTile icon={<LuDoorOpen className="h-6 w-6" />} label="Libres" value={counts.libre}
-          ratio={counts.libre / total} tone="text-white" />
+          ratio={counts.libre / total} statut="libre" />
         <SummaryTile icon={<LuClock className="h-6 w-6" />} label="Réservées" value={counts.reservee}
-          ratio={counts.reservee / total} tone="text-accent" />
+          ratio={counts.reservee / total} statut="reservee" />
         <SummaryTile icon={<LuUsers className="h-6 w-6" />} label="Occupées" value={counts.occupee}
-          ratio={counts.occupee / total} tone="text-accent" filled />
+          ratio={counts.occupee / total} statut="occupee" />
       </div>
 
       {/* ===== Grille des salles ===== */}
@@ -105,29 +118,28 @@ export default function RealTimeDisplay() {
             {rooms.map((room) => {
               const s = room.statut_effectif ?? room.statut ?? "libre";
               const occupied = s === "occupee";
+              const highlighted = s !== "libre";
               return (
                 <li key={room.id_salle}
-                  className={`flex min-h-[168px] flex-col rounded-2xl border p-5 shadow-lg transition-all duration-500 ${TILE[s] ?? TILE.libre}`}>
+                  className={`flex min-h-[168px] flex-col rounded-2xl border p-5 shadow-lg ${TILE[s] ?? TILE.libre}`}>
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="font-display text-2xl font-black leading-tight">{room.nom_salle}</h2>
-                    <LuCircle className={`h-3.5 w-3.5 shrink-0 ${STATUT_DOT[s]}`} fill="currentColor" />
+                    <LuCircle className={`h-3.5 w-3.5 shrink-0 ${highlighted ? "text-white" : (STATUT_DOT[s] ?? STATUT_DOT.libre)}`} fill="currentColor" />
                   </div>
 
                   {(room.type_salle || room.capacite) && (
-                    <p className={`mt-1 flex items-center gap-1.5 text-sm ${occupied ? "text-white/80" : "text-white/50"}`}>
+                    <p className={`mt-1 flex items-center gap-1.5 text-sm ${highlighted ? "text-white/80" : "text-white/50"}`}>
                       {room.capacite ? <><LuUsers className="h-4 w-4" /> {room.capacite} places</> : null}
                       {room.type_salle ? <span className="opacity-60">· {room.type_salle}</span> : null}
                     </p>
                   )}
 
                   <div className="mt-auto flex items-end justify-between pt-4">
-                    <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
-                      occupied ? "bg-white/20" : s === "reservee" ? "bg-accent text-white" : "bg-white/10 text-white/70"
-                    }`}>
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${occupied ? "bg-white/20 text-white" : (STATUT_BADGE[s] ?? STATUT_BADGE.libre)}`}>
                       {STATUT_SALLE_LABELS[s] ?? s}
                     </span>
                     {room.prochaine_reservation && (
-                      <span className={`flex items-center gap-1 text-xs font-medium ${occupied ? "text-white/85" : "text-accent"}`}>
+                      <span className="flex items-center gap-1 text-xs font-medium text-white/85">
                         <LuClock className="h-3.5 w-3.5" /> {room.prochaine_reservation}
                       </span>
                     )}
@@ -142,9 +154,9 @@ export default function RealTimeDisplay() {
       {/* ===== Pied de page ===== */}
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-6 py-3 text-xs text-white/50 sm:px-10">
         <div className="flex items-center gap-4">
-          <Legend dotClass="text-white/40" label="Libre" />
-          <Legend dotClass="text-accent" label="Réservée" />
-          <Legend dotClass="text-accent" label="Occupée" filled />
+          <Legend dotClass="text-emerald-400" label="Libre" />
+          <Legend dotClass="text-amber-400" label="Réservée" />
+          <Legend dotClass="text-red-400" label="Occupée" filled />
         </div>
         <div className="flex items-center gap-2">
           {online ? <LuWifi className="h-4 w-4 text-accent rt-blink" /> : <LuWifiOff className="h-4 w-4 text-white/40" />}
@@ -157,19 +169,19 @@ export default function RealTimeDisplay() {
   );
 }
 
-function SummaryTile({ icon, label, value, ratio, tone, filled = false }) {
+function SummaryTile({ icon, label, value, ratio, statut }) {
   return (
-    <div className={`flex items-center gap-4 rounded-2xl border border-white/10 p-4 ${filled ? "bg-accent/10" : "bg-white/[0.03]"}`}>
-      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${filled ? "bg-accent text-white" : "bg-white/10"} ${tone}`}>
+    <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${SUMMARY_ICON_BG[statut]} ${SUMMARY_TONE[statut]}`}>
         {icon}
       </span>
       <div className="flex-1">
         <div className="flex items-baseline justify-between">
           <span className="text-sm text-white/60">{label}</span>
-          <span className="font-display text-2xl font-black">{value}</span>
+          <span className={`font-display text-2xl font-black ${SUMMARY_TONE[statut]}`}>{value}</span>
         </div>
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div className={`h-full rounded-full ${filled ? "bg-accent" : "bg-white/40"}`}
+          <div className={`h-full rounded-full ${SUMMARY_BAR[statut]}`}
             style={{ width: `${Math.round((ratio || 0) * 100)}%` }} />
         </div>
       </div>

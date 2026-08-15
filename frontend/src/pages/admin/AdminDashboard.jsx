@@ -74,8 +74,6 @@ export default function AdminDashboard() {
             <ChartCard title="Évolution des revenus encaissés (6 derniers mois)">
               <AreaTrend data={revMonthly} dataKey="revenus" xKey="mois" name="Revenus (FCFA)" color="#c2410c" />
             </ChartCard>
-            {/* ⚠ RETIRÉ : BarsChart "Réservations par mois", doublon exact de
-                l'AreaTrend "Évolution des réservations" ci-dessus (même state `chart`). */}
             <ChartCard title="Occupation des salles">
               <DonutChart data={occ} />
             </ChartCard>

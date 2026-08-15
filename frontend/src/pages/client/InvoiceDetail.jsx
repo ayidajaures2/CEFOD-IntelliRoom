@@ -52,10 +52,31 @@ export default function InvoiceDetail() {
           <div className="flex justify-between"><dt className="text-ink/55">Moyen de paiement</dt><dd>{MODE_PAIEMENT_LABELS[paiement.mode_paiement] ?? "—"}</dd></div>
           <div className="flex justify-between"><dt className="text-ink/55">Référence</dt><dd className="font-mono">{paiement.reference ?? "—"}</dd></div>
           <div className="flex justify-between"><dt className="text-ink/55">Statut du paiement</dt><dd><StatutBadge statut={paiement.statut} /></dd></div>
-          <div className="flex justify-between border-t border-ink/10 pt-3 font-display text-lg font-bold">
-            <dt>Total</dt><dd className="text-accent-dark">{formatMoney(paiement.montant)}</dd>
-          </div>
         </dl>
+
+        {invoice.lignes?.length > 0 && (
+          <div className="border-t border-ink/5 px-6 py-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/45">Détail</p>
+            <table className="w-full text-sm">
+              <tbody>
+                {invoice.lignes.map((l) => (
+                  <tr key={l.id_ligne} className="border-b border-ink/5 last:border-0">
+                    <td className="py-1.5 text-ink/70">
+                      {l.description}{Number(l.quantite) > 1 ? ` × ${l.quantite}` : ""}
+                    </td>
+                    <td className="py-1.5 text-right font-medium">{formatMoney(l.montant)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="border-t border-ink/10 px-6 py-4">
+          <div className="flex justify-between font-display text-lg font-bold">
+            <span>Total</span><span className="text-accent-dark">{formatMoney(invoice.total_ttc ?? paiement.montant)}</span>
+          </div>
+        </div>
         <div className="border-t border-ink/5 px-6 py-4">
           <button onClick={download} className="btn-dark w-full">Télécharger le PDF</button>
         </div>

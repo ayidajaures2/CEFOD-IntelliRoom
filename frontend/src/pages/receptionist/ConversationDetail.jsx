@@ -3,11 +3,16 @@ import { Link, useParams } from "react-router-dom";
 import ChatWindow from "../../components/chat/ChatWindow";
 import { fetchMessages, sendMessage, closeConversation } from "../../api/conversationApi";
 import { usePolling } from "../../hooks/usePolling";
+import { useAuth } from "../../hooks/useAuth";
+import { homePathForRole } from "../../utils/roleHelpers";
 import { useNotify } from "../../contexts/NotificationContext";
 import { apiErrorMessage } from "../../utils/apiError";
 
+/** Générique par rôle — voir ConversationsList.jsx pour la justification. */
 export default function ConversationDetail() {
   const { id } = useParams();
+  const { role } = useAuth();
+  const base = homePathForRole(role);
   const { success, error: toastError } = useNotify();
   const [messages, setMessages] = useState([]);
   const [sending, setSending] = useState(false);
@@ -46,7 +51,7 @@ export default function ConversationDetail() {
   return (
     <>
       <div className="mb-4 flex items-center justify-between">
-        <Link to="/reception/conversations" className="text-sm text-ink/55 hover:text-accent">← Toutes les conversations</Link>
+        <Link to={`${base}/conversations`} className="text-sm text-ink/55 hover:text-accent">← Toutes les conversations</Link>
         <button onClick={close} className="btn-outline px-3 py-1.5 text-xs">Clôturer</button>
       </div>
       <ChatWindow

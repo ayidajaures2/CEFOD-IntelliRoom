@@ -23,6 +23,7 @@ const STYLES = {
   terminee: "bg-ink/5 text-ink/50",
   annulee: "bg-surface text-ink/40 border border-ink/15 line-through",
   valide: "bg-ink text-paper",
+  encaisse: "bg-accent-soft text-accent-dark border border-dashed border-accent/40",
   annule: "bg-surface text-ink/40 border border-ink/15",
 };
 
