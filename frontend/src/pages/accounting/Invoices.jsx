@@ -5,11 +5,12 @@ import { useNotify } from "../../contexts/NotificationContext";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
+import InvoicePreviewModal from "../../components/common/InvoicePreviewModal";
 import { formatDate } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
 import { MODE_PAIEMENT_LABELS, MODE_GENERATION_FACTURE_LABELS } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
-import { LuDownload, LuMail } from "react-icons/lu";
+import { LuEye, LuDownload, LuMail } from "react-icons/lu";
 
 /** Consultation ET téléchargement — la comptabilité fait partie des deux
  * seuls rôles (avec l'admin) autorisés à télécharger (InvoiceController::canDownload()). */
@@ -19,6 +20,7 @@ export default function ComptabiliteInvoices() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sendingId, setSendingId] = useState(null);
+  const [previewId, setPreviewId] = useState(null);
 
   useEffect(() => {
     fetchInvoices()
@@ -80,6 +82,13 @@ export default function ComptabiliteInvoices() {
                     <td className="text-right">
                       <div className="flex justify-end gap-2">
                         <button
+                          onClick={() => setPreviewId(f.id_facture)}
+                          className="btn-outline flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                          title="Aperçu"
+                        >
+                          <LuEye size={13} />
+                        </button>
+                        <button
                           onClick={() => downloadInvoicePdf(f.id_facture, f.numero_facture).catch(() => toastError("Téléchargement impossible."))}
                           className="btn-dark flex items-center gap-1 px-3 py-1.5 text-xs"
                         >
@@ -101,6 +110,24 @@ export default function ComptabiliteInvoices() {
           </table>
         </div>
       )}
+
+      <InvoicePreviewModal
+        invoiceId={previewId}
+        onClose={() => setPreviewId(null)}
+        actions={
+          previewId && (
+            <button
+              className="btn-dark flex items-center gap-1 px-3 py-1.5 text-sm"
+              onClick={() => {
+                const f = invoices.find((i) => i.id_facture === previewId);
+                if (f) downloadInvoicePdf(f.id_facture, f.numero_facture).catch(() => toastError("Téléchargement impossible."));
+              }}
+            >
+              <LuDownload size={13} /> Télécharger
+            </button>
+          )
+        }
+      />
     </>
   );
 }

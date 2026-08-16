@@ -176,6 +176,49 @@ class ChatbotController extends Controller
         return response()->json(['id_conversation' => $conversation->id_conversation]);
     }
 
+    /**
+     * RÉCEPTION - Ouvrir (ou créer) la conversation avec un client précis.
+     *
+     * Contrairement à startConversation() (qui ancre la conversation sur
+     * Auth::id(), donc sur le membre du personnel lui-même), ici la
+     * conversation doit être ancrée sur le CLIENT (id_utilisateur = id_client)
+     * pour que ce client la retrouve dans son propre espace — sinon elle
+     * resterait invisible pour lui (getConversations() filtre par
+     * id_utilisateur = Auth::id() côté client).
+     *
+     * Idempotent : si une conversation ouverte existe déjà pour ce client,
+     * elle est réutilisée plutôt que d'en créer une nouvelle à chaque clic.
+     */
+    public function startConversationForClient(Request $request)
+    {
+        if (!$this->isStaff()) {
+            return response()->json(['message' => 'Accès non autorisé'], 403);
+        }
+
+        $validated = $request->validate([
+            'id_client' => 'required|exists:utilisateur,id_utilisateur',
+        ]);
+
+        $client = \App\Models\Utilisateur::find($validated['id_client']);
+        if (!$client || $client->role !== 'client') {
+            return response()->json(['message' => 'Cet utilisateur n\'est pas un client'], 422);
+        }
+
+        $conversation = Conversation::where('id_utilisateur', $client->id_utilisateur)
+            ->whereNull('fin_conversation')
+            ->latest('debut_conversation')
+            ->first();
+
+        if (!$conversation) {
+            $conversation = Conversation::create([
+                'id_utilisateur' => $client->id_utilisateur,
+                'debut_conversation' => now(),
+            ]);
+        }
+
+        return response()->json(['id_conversation' => $conversation->id_conversation]);
+    }
+
     public function sendMessage(Request $request)
     {
         $validated = $request->validate([

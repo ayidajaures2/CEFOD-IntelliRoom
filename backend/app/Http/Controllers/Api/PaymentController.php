@@ -21,7 +21,7 @@ class PaymentController extends Controller
      */
     public function cashierPayments(Request $request)
     {
-        $query = Paiement::with(['reservation', 'reservation.client', 'reservation.salle'])
+        $query = Paiement::with(['reservation', 'reservation.client', 'reservation.salle', 'facture'])
             ->orderBy('date_paiement', 'desc');
 
         if ($request->has('statut')) {

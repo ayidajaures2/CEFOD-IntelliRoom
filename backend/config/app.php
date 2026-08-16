@@ -60,12 +60,15 @@ return [
     |--------------------------------------------------------------------------
     |
     | Here you may specify the default timezone for your application, which
-    | will be used by the PHP date and date-time functions. The timezone
-    | is set to "UTC" by default as it is suitable for most use cases.
+    | will be used by the PHP date and date-time functions. Set to Chad's
+    | real timezone (UTC+1, no DST) — was previously left at Laravel's
+    | default "UTC", which caused a systematic 1-hour lag between the times
+    | entered by users (Tchad local time) and now() comparisons server-side
+    | (e.g. RealTimeDisplay room occupancy flipping an hour late).
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => 'Africa/Ndjamena',
 
     /*
     |--------------------------------------------------------------------------

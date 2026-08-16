@@ -5,9 +5,11 @@ import { useNotify } from "../../contexts/NotificationContext";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
+import InvoicePreviewModal from "../../components/common/InvoicePreviewModal";
 import { formatDate } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
 import { MODE_PAIEMENT_LABELS } from "../../utils/constants";
+import { LuEye } from "react-icons/lu";
 
 /**
  * Consultation des factures émises (caissier) — lecture seule.
@@ -20,6 +22,7 @@ export default function CashierInvoices() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [previewId, setPreviewId] = useState(null);
 
   useEffect(() => {
     fetchInvoices()
@@ -61,6 +64,7 @@ export default function CashierInvoices() {
                 <th>Émise le</th>
                 <th>Montant</th>
                 <th>Mode</th>
+                <th className="text-right">Aperçu</th>
               </tr>
             </thead>
             <tbody>
@@ -74,6 +78,15 @@ export default function CashierInvoices() {
                     <td>{formatDate(f.date_emission)}</td>
                     <td>{formatMoney(f.paiement?.montant)}</td>
                     <td className="text-ink/60">{MODE_PAIEMENT_LABELS[modePaiement] ?? modePaiement ?? "—"}</td>
+                    <td className="text-right">
+                      <button
+                        onClick={() => setPreviewId(f.id_facture)}
+                        className="btn-outline px-2.5 py-1.5 text-xs"
+                        title="Aperçu"
+                      >
+                        <LuEye size={13} />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -81,6 +94,8 @@ export default function CashierInvoices() {
           </table>
         </div>
       )}
+
+      <InvoicePreviewModal invoiceId={previewId} onClose={() => setPreviewId(null)} />
     </>
   );
 }

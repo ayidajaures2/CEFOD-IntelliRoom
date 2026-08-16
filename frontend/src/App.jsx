@@ -7,6 +7,7 @@ import { ROLES } from "./utils/constants";
 // Public
 import Home from "./pages/public/Home";
 import Rooms from "./pages/public/Rooms";
+import Services from "./pages/public/Services";
 import RoomDetail from "./pages/public/RoomDetail";
 import Login from "./pages/public/Login";
 import Register from "./pages/public/Register";
@@ -65,6 +66,7 @@ export default function App() {
       <Route element={<MainLayout />}>
         <Route index element={<Home />} />
         <Route path="/salles" element={<Rooms />} />
+        <Route path="/services" element={<Services />} />
         <Route path="/salles/:id" element={<RoomDetail />} />
         <Route path="/chatbot" element={<Chatbot />} />
         <Route path="/a-propos" element={<About />} />

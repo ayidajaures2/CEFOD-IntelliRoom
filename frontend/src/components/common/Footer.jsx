@@ -18,7 +18,7 @@ export default function Footer() {
         </nav>
       </div>
       <div className="border-t border-ink/5 py-4 text-center text-xs text-ink/40">
-        © {new Date().getFullYear()} CEFOD — Application de gestion des réservations de salles.
+        © {new Date().getFullYear()} CEFOD — Application de gestion des réservations de salles. - Développée par Jaurès Ayida
       </div>
     </footer>
   );

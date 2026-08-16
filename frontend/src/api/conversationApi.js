@@ -4,6 +4,9 @@ import { ENDPOINTS } from "./endpoints";
 /** Messagerie client ↔ réception (ChatbotController, auth:sanctum). */
 export const fetchConversations = () => api.get(ENDPOINTS.chatbot.conversations);
 export const startConversation = () => api.post(ENDPOINTS.chatbot.start);
+/** Réservé au personnel — ouvre (ou crée) la conversation avec un client précis. */
+export const startConversationForClient = (idClient) =>
+  api.post(ENDPOINTS.chatbot.startForClient, { id_client: idClient });
 export const fetchMessages = (id) => api.get(ENDPOINTS.chatbot.messages(id));
 export const sendMessage = (id, contenu) =>
   api.post(ENDPOINTS.chatbot.send, {

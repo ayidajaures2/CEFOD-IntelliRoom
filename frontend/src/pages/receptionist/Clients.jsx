@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { fetchClients } from "../../api/receptionistApi";
+import { fetchConversations, startConversationForClient } from "../../api/conversationApi";
 import { extractList } from "../../utils/extract";
 import { useNotify } from "../../contexts/NotificationContext";
 import PageHeader from "../../components/common/PageHeader";
@@ -9,14 +10,17 @@ import EmptyState from "../../components/common/EmptyState";
 import { CATEGORIE_CLIENT_LABELS, SOUS_CATEGORIE_CLIENT_LABELS } from "../../utils/constants";
 import { formatDate } from "../../utils/formatDate";
 import { whatsappLink } from "../../utils/whatsapp";
+import { apiErrorMessage } from "../../utils/apiError";
 import { LuMessageSquare, LuPhone } from "react-icons/lu";
 
 /** Consultation des comptes clients (réception, lecture seule — voir userApi.js pour la gestion admin). */
 export default function Clients() {
+  const navigate = useNavigate();
   const { error: toastError } = useNotify();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [contactingId, setContactingId] = useState(null);
 
   useEffect(() => {
     fetchClients()
@@ -30,6 +34,33 @@ export default function Clients() {
     const hay = `${c.nom} ${c.prenom} ${c.email} ${c.telephone ?? ""}`.toLowerCase();
     return hay.includes(search.toLowerCase());
   });
+
+  /**
+   * Ouvre la conversation existante du client si elle existe déjà (recherche
+   * dans la liste globale du personnel), sinon en crée une nouvelle — puis
+   * redirige directement dedans. Pas de recherche/filtre intermédiaire :
+   * un clic, on est dans la discussion.
+   */
+  const contact = async (client) => {
+    setContactingId(client.id_utilisateur);
+    try {
+      const { data } = await fetchConversations();
+      const list = Array.isArray(data) ? data : data.data ?? [];
+      const existing = list.find((c) => c.utilisateur?.id_utilisateur === client.id_utilisateur);
+
+      if (existing) {
+        navigate(`/reception/conversations/${existing.id_conversation}`);
+        return;
+      }
+
+      const { data: created } = await startConversationForClient(client.id_utilisateur);
+      navigate(`/reception/conversations/${created.id_conversation}`);
+    } catch (e) {
+      toastError(apiErrorMessage(e, "Impossible d'ouvrir la conversation."));
+    } finally {
+      setContactingId(null);
+    }
+  };
 
   return (
     <>
@@ -65,13 +96,14 @@ export default function Clients() {
                   <td className="text-ink/60">{formatDate(c.date_creation)}</td>
                   <td className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Link
-                        to={`/reception/conversations?q=${encodeURIComponent(c.prenom + " " + c.nom)}`}
-                        className="btn-outline px-2.5 py-1.5 text-xs"
-                        title="Reprendre la conversation avec ce client"
+                      <button
+                        onClick={() => contact(c)}
+                        disabled={contactingId === c.id_utilisateur}
+                        className="btn-outline px-2.5 py-1.5 text-xs disabled:opacity-50"
+                        title="Ouvrir ou créer la conversation avec ce client"
                       >
                         <LuMessageSquare size={14} />
-                      </Link>
+                      </button>
                       {c.telephone && (
                         <a
                           href={whatsappLink(c.telephone)}

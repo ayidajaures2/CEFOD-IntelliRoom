@@ -6,13 +6,18 @@ import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
 import StatutBadge from "../../components/common/StatutBadge";
 import { formatDateTime } from "../../utils/formatDate";
+import { formatMoney } from "../../utils/formatMoney";
 import {
   CATEGORIE_CLIENT_LABELS,
   STATUT_RESERVATION_LABELS,
   TYPE_ACTIVITE_LABELS,
+  SUJET_PRINCIPAL_LABELS,
+  PUBLIC_CIBLE_LABELS,
+  MEDIAS_INVITES_LABELS,
+  NOMBRE_FEMMES_LABELS,
 } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
-import { LuRefreshCw } from "react-icons/lu";
+import { LuRefreshCw, LuEye } from "react-icons/lu";
 
 const FILTERS = ["", "en_attente", "validee", "confirmee", "annulee"];
 
@@ -31,6 +36,8 @@ export default function ManageBookings() {
   const [noteModal, setNoteModal] = useState(null);
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+
+  const [detailModal, setDetailModal] = useState(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
@@ -157,6 +164,13 @@ export default function ManageBookings() {
                   </td>
                   <td className="text-right">
                     <div className="flex justify-end gap-2">
+                      <button
+                        className="btn-outline px-2.5 py-1.5 text-xs"
+                        onClick={() => setDetailModal(b)}
+                        title="Voir le détail complet de la demande"
+                      >
+                        <LuEye size={14} />
+                      </button>
                       {b.statut === "en_attente" && (
                         <>
                           <button className="btn-primary px-3 py-1.5 text-xs" onClick={() => act(validateBooking, b, "Réservation validée.")}>Valider</button>
@@ -182,15 +196,10 @@ export default function ManageBookings() {
         </div>
       )}
 
+      {/* ---------- Modale : note interne ---------- */}
       {noteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-          onClick={closeNote}
-        >
-          <div
-            className="card w-full max-w-md bg-surface p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={closeNote}>
+          <div className="card w-full max-w-md bg-surface p-5" onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-1 font-display text-lg font-bold">Note interne</h2>
             <p className="mb-3 text-sm text-ink/50">
               {noteModal.client ? `${noteModal.client.prenom} ${noteModal.client.nom}` : `#${noteModal.id_client}`}
@@ -218,6 +227,126 @@ export default function ManageBookings() {
           </div>
         </div>
       )}
+
+      {/* ---------- Modale : détail complet de la demande ---------- */}
+      {detailModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+          onClick={() => setDetailModal(null)}
+        >
+          <div
+            className="card max-h-[85vh] w-full max-w-xl overflow-y-auto bg-surface p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-xl font-bold">
+                  {detailModal.client ? `${detailModal.client.prenom} ${detailModal.client.nom}` : `Client #${detailModal.id_client}`}
+                </h2>
+                <p className="text-sm text-ink/55">
+                  {detailModal.salle?.nom_salle ?? `Salle #${detailModal.id_salle}`}
+                  {" · "}{CATEGORIE_CLIENT_LABELS[detailModal.client?.categorie_client] ?? "—"}
+                </p>
+              </div>
+              <StatutBadge statut={detailModal.statut_effectif ?? detailModal.statut} />
+            </div>
+
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <DetailItem label="Créneau" full>
+                {formatDateTime(detailModal.date_debut)} → {formatDateTime(detailModal.date_fin)}
+              </DetailItem>
+
+              <DetailItem label="Objet" full>{detailModal.motif || "—"}</DetailItem>
+
+              <DetailItem label="Type d'activité">
+                {TYPE_ACTIVITE_LABELS[detailModal.type_activite] ?? "—"}
+                {detailModal.type_activite === "autre" && detailModal.type_activite_autre ? ` (${detailModal.type_activite_autre})` : ""}
+              </DetailItem>
+              <DetailItem label="Sujet principal">
+                {SUJET_PRINCIPAL_LABELS[detailModal.sujet_principal] ?? "—"}
+                {detailModal.sujet_principal === "autre" && detailModal.sujet_principal_autre ? ` (${detailModal.sujet_principal_autre})` : ""}
+              </DetailItem>
+
+              <DetailItem label="Public visé">{PUBLIC_CIBLE_LABELS[detailModal.public_cible] ?? "—"}</DetailItem>
+              <DetailItem label="Médias invités">{MEDIAS_INVITES_LABELS[detailModal.medias_invites] ?? "—"}</DetailItem>
+
+              <DetailItem label="Retransmission radio">
+                {detailModal.retransmission_radio
+                  ? `Oui — ${detailModal.duree_retransmission_heures ?? "?"} h`
+                  : "Non"}
+              </DetailItem>
+              <DetailItem label="Participants">
+                {detailModal.nombre_participants ?? "—"}
+                {detailModal.nombre_femmes ? ` · Femmes : ${NOMBRE_FEMMES_LABELS[detailModal.nombre_femmes]}` : ""}
+              </DetailItem>
+
+              {(detailModal.titre_groupe_utilisateur || detailModal.adresse_groupe_utilisateur) && (
+                <DetailItem label="Groupe" full>
+                  {detailModal.titre_groupe_utilisateur}
+                  {detailModal.adresse_groupe_utilisateur ? ` — ${detailModal.adresse_groupe_utilisateur}` : ""}
+                </DetailItem>
+              )}
+
+              {(detailModal.nom_responsable_reunion || detailModal.adresse_responsable_reunion) && (
+                <DetailItem label="Responsable de la réunion" full>
+                  {detailModal.nom_responsable_reunion}
+                  {detailModal.adresse_responsable_reunion ? ` — ${detailModal.adresse_responsable_reunion}` : ""}
+                </DetailItem>
+              )}
+            </dl>
+
+            {detailModal.services?.length > 0 && (
+              <div className="mt-4 border-t border-ink/10 pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/45">Services annexes</p>
+                <ul className="space-y-1 text-sm">
+                  {detailModal.services.map((rs) => (
+                    <li key={rs.id_reservation_service} className="flex justify-between">
+                      <span>{rs.service?.nom ?? "Service"} × {rs.quantite}</span>
+                      <span className="font-medium">{formatMoney(rs.montant)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {detailModal.note_interne && (
+              <div className="mt-4 rounded-lg bg-accent-soft p-3 text-sm text-ink/75">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent-dark">Note interne</p>
+                {detailModal.note_interne}
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              {detailModal.statut === "en_attente" && (
+                <>
+                  <button
+                    className="btn-outline px-3 py-1.5 text-sm"
+                    onClick={() => { setDetailModal(null); window.confirm("Refuser/annuler cette demande ?") && act(cancelBooking, detailModal, "Demande refusée."); }}
+                  >
+                    Refuser
+                  </button>
+                  <button
+                    className="btn-primary px-3 py-1.5 text-sm"
+                    onClick={() => { setDetailModal(null); act(validateBooking, detailModal, "Réservation validée."); }}
+                  >
+                    Valider
+                  </button>
+                </>
+              )}
+              <button className="btn-outline px-3 py-1.5 text-sm" onClick={() => setDetailModal(null)}>Fermer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+function DetailItem({ label, children, full = false }) {
+  return (
+    <div className={full ? "col-span-2" : ""}>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-ink/40">{label}</dt>
+      <dd className="mt-0.5 text-ink/80">{children}</dd>
+    </div>
   );
 }

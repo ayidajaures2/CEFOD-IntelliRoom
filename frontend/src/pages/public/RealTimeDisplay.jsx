@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   LuDoorOpen, LuClock, LuUsers, LuWifi, LuWifiOff, LuCircle,
@@ -40,7 +40,6 @@ export default function RealTimeDisplay() {
   const [clock, setClock] = useState(new Date());
 
   const load = useCallback(async () => {
-    setClock(new Date());
     try {
       let list;
       try {
@@ -57,7 +56,20 @@ export default function RealTimeDisplay() {
       setOnline(false);
     }
   }, []);
-  usePolling(load, POLLING_INTERVAL);
+  // pauseWhenHidden=false : cet écran est un kiosque projeté en continu à
+  // l'accueil, pas un tableau de bord interne — il ne doit JAMAIS geler,
+  // même si le navigateur considère la page "masquée" (veille, focus perdu).
+  usePolling(load, POLLING_INTERVAL, true, false);
+
+  // Horloge découplée du polling de données : sinon les secondes ne
+  // défilaient que par paquets de 5 (au rythme du polling), donnant une
+  // fausse impression de gel même quand tout fonctionnait normalement.
+  useEffect(() => {
+    const tick = () => setClock(new Date());
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const counts = useMemo(() => {
     const c = { libre: 0, reservee: 0, occupee: 0 };

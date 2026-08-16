@@ -13,6 +13,7 @@ import {
   computeOpenMinutes,
   validateSlot,
 } from "../../utils/constants";
+import TermsGate from "./TermsGate";
 import { toApiDateTime } from "../../utils/formatDate";
 
 const EMPTY = {
@@ -52,6 +53,10 @@ const EMPTY = {
  */
 export default function BookingForm({ rooms, user, initialRoomId = "", onSubmit, submitting }) {
   const [form, setForm] = useState({ ...EMPTY, id_salle: initialRoomId ? String(initialRoomId) : "" });
+  // Jamais persisté (pas de localStorage/contexte) : se réinitialise à
+  // chaque montage du composant, donc à chaque nouvelle demande — le client
+  // doit relire et réaccepter à chaque fois, comme demandé.
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [services, setServices] = useState([]);
   const [selectedServices, setSelectedServices] = useState({}); // { id_service: quantite }
 
@@ -140,7 +145,7 @@ export default function BookingForm({ rooms, user, initialRoomId = "", onSubmit,
   const radioIncomplete = form.retransmission_radio && !form.duree_retransmission_heures;
   const canSubmit =
     form.id_salle && form.date_debut && form.date_fin && form.motif.trim() &&
-    !datesInvalid && !hasSlotErrors && !radioIncomplete;
+    !datesInvalid && !hasSlotErrors && !radioIncomplete && acceptedTerms;
 
   const submit = () =>
     onSubmit({
@@ -337,6 +342,8 @@ export default function BookingForm({ rooms, user, initialRoomId = "", onSubmit,
             })}
           </fieldset>
         )}
+
+        <TermsGate accepted={acceptedTerms} onAcceptedChange={setAcceptedTerms} />
 
         <button className="btn-primary w-full" disabled={!canSubmit || submitting} onClick={submit}>
           {submitting ? "Envoi…" : "Envoyer la demande de réservation"}

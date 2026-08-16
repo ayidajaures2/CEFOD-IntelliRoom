@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { LuSun, LuMoon, LuMenu, LuX } from "react-icons/lu";
+import { LuSun, LuMoon, LuMenu, LuX, LuBadgePlus, LuSigma, LuSmile, LuSmilePlus, LuSquareMenu, LuCircleMinus, LuYoutube, LuEyeClosed, LuDoorClosed, LuBadgeX, LuBadgeMinus, LuBookUser, LuFileMinus } from "react-icons/lu";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { homePathForRole } from "../../utils/roleHelpers";
 import Logo from "./Logo";
+import { VscLayoutMenubar } from "react-icons/vsc";
 
 const LINKS = [
   { to: "/", label: "Accueil", end: true },
   { to: "/salles", label: "Salles" },
+  { to: "/services", label: "Services" },
   { to: "/affichage", label: "Disponibilités" },
   { to: "/chatbot", label: "Assistant" },
   { to: "/a-propos", label: "À propos" },

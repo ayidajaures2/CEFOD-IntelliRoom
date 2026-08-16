@@ -1,19 +1,10 @@
 import api from "./client";
-import { ENDPOINTS, rolePrefix } from "./endpoints";
+import { ENDPOINTS } from "./endpoints";
 
 export const fetchInvoices = () => api.get(ENDPOINTS.invoices.list());
 
-/**
- * Détail d'une facture : seul l'admin dispose d'une route show ;
- * pour le client on retrouve la facture dans sa propre liste.
- */
-export const fetchInvoice = async (id) => {
-  if (rolePrefix() === "/admin") return api.get(ENDPOINTS.invoices.adminDetail(id));
-  const { data } = await api.get(ENDPOINTS.invoices.list());
-  const list = Array.isArray(data) ? data : data.data ?? [];
-  const found = list.find((f) => String(f.id_facture ?? f.id) === String(id));
-  return { data: found ?? null };
-};
+/** Détail d'une facture (avec ses lignes) — même route pour tous les rôles ayant accès. */
+export const fetchInvoice = (id) => api.get(ENDPOINTS.invoices.detail(id));
 
 /** Télécharge le PDF DomPDF en conservant l'en-tête d'authentification. */
 export const downloadInvoicePdf = async (id, numero) => {

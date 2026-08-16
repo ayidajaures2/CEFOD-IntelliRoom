@@ -5,11 +5,14 @@ import { useNotify } from "../../contexts/NotificationContext";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
+import InvoicePreviewModal from "../../components/common/InvoicePreviewModal";
 import { formatDate } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
+import { LuEye } from "react-icons/lu";
 
 /**
  * Consultation des factures émises (réception) — lecture seule.
+ *Pas de bouton téléchargement ici : InvoiceController::canDownload()
  * exclut la réceptionniste (seuls admin/comptabilité téléchargent, plus le
  * client pour les siennes). L'exposer renverrait un 403 systématique.
  */
@@ -18,6 +21,7 @@ export default function ReceptionistInvoices() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [previewId, setPreviewId] = useState(null);
 
   useEffect(() => {
     fetchInvoices()
@@ -53,7 +57,7 @@ export default function ReceptionistInvoices() {
         <div className="card overflow-x-auto">
           <table className="table-base">
             <thead>
-              <tr><th>N°</th><th>Client</th><th>Émise le</th><th>Montant</th><th>Mode</th></tr>
+              <tr><th>N°</th><th>Client</th><th>Émise le</th><th>Montant</th><th>Mode</th><th className="text-right">Aperçu</th></tr>
             </thead>
             <tbody>
               {filtered.map((f) => {
@@ -65,6 +69,15 @@ export default function ReceptionistInvoices() {
                     <td>{formatDate(f.date_emission)}</td>
                     <td>{formatMoney(f.paiement?.montant)}</td>
                     <td className="text-ink/60">{f.paiement?.mode_paiement ?? "—"}</td>
+                    <td className="text-right">
+                      <button
+                        onClick={() => setPreviewId(f.id_facture)}
+                        className="btn-outline px-2.5 py-1.5 text-xs"
+                        title="Aperçu"
+                      >
+                        <LuEye size={13} />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -72,6 +85,8 @@ export default function ReceptionistInvoices() {
           </table>
         </div>
       )}
+
+      <InvoicePreviewModal invoiceId={previewId} onClose={() => setPreviewId(null)} />
     </>
   );
 }

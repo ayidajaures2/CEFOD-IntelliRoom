@@ -310,6 +310,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // CHATBOT (protégé — clients connectés & personnel)
     // ============================================
     Route::post('/chatbot/conversation/start', [ChatbotController::class, 'startConversation']);
+    Route::post('/chatbot/conversation/start-for-client', [ChatbotController::class, 'startConversationForClient']);
     Route::post('/chatbot/message', [ChatbotController::class, 'sendMessage']);
     Route::get('/chatbot/conversations', [ChatbotController::class, 'getConversations']);
     Route::get('/chatbot/conversations/{id}/messages', [ChatbotController::class, 'getMessages']);

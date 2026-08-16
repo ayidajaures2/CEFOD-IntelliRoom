@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchAccountingPayments,
   recordManualPayment,
@@ -12,23 +12,34 @@ import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
 import StatutBadge from "../../components/common/StatutBadge";
 import Modal from "../../components/common/Modal";
+import InvoicePreviewModal from "../../components/common/InvoicePreviewModal";
 import { formatMoney } from "../../utils/formatMoney";
 import { formatDateTime } from "../../utils/formatDate";
 import { MODE_PAIEMENT_LABELS } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
 import { extractList } from "../../utils/extract";
-import { LuRefreshCw } from "react-icons/lu";
+import { LuRefreshCw, LuArrowUpDown, LuFileText } from "react-icons/lu";
 
 const MODES_COMPTABILITE = [
   { value: "cheque", label: "Chèque" },
   { value: "virement", label: "Virement bancaire" },
 ];
 
+const COLUMNS = [
+  { key: "client", label: "Client" },
+  { key: "montant", label: "Montant" },
+  { key: "mode_paiement", label: "Mode" },
+  { key: "reference", label: "Référence" },
+  { key: "date_paiement", label: "Date" },
+  { key: "statut", label: "Statut" },
+];
+
 /**
- * La comptabilité valide TOUS les paiements manuels (encaisse → valide),
- * quel que soit qui les a enregistrés (caissier pour les espèces, elle-même
- * pour chèque/virement). Elle ne voit jamais de paiement mobile money ici :
- * ceux-là sont automatiques de bout en bout.
+ * La comptabilité valide les paiements manuels (encaisse → valide), quel
+ * que soit qui les a enregistrés (caissier pour les espèces, elle-même
+ * pour chèque/virement). La table du bas montre TOUS les paiements, tous
+ * modes confondus (y compris Moov/Airtel, automatiques) — c'est une vue
+ * d'ensemble/historique, pas seulement une file d'actions à traiter.
  */
 export default function ValidatePayments() {
   const { success, error: toastError } = useNotify();
@@ -40,6 +51,10 @@ export default function ValidatePayments() {
   const [recording, setRecording] = useState(null);
   const [form, setForm] = useState({ montant: "", mode_paiement: "cheque", reference: "" });
   const [busy, setBusy] = useState(false);
+
+  const [sortKey, setSortKey] = useState("date_paiement");
+  const [sortDir, setSortDir] = useState("desc");
+  const [previewId, setPreviewId] = useState(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
@@ -109,6 +124,36 @@ export default function ValidatePayments() {
     }
   };
 
+  const toggleSort = (key) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const sortedPayments = useMemo(() => {
+    const withClientName = payments.map((p) => ({
+      ...p,
+      _client: p.reservation?.client ? `${p.reservation.client.prenom} ${p.reservation.client.nom}` : "",
+    }));
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    return withClientName.sort((a, b) => {
+      let va, vb;
+      switch (sortKey) {
+        case "client": va = a._client; vb = b._client; break;
+        case "montant": va = Number(a.montant); vb = Number(b.montant); break;
+        case "date_paiement": va = new Date(a.date_paiement); vb = new Date(b.date_paiement); break;
+        default: va = a[sortKey] ?? ""; vb = b[sortKey] ?? "";
+      }
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+  }, [payments, sortKey, sortDir]);
+
   return (
     <>
       <PageHeader
@@ -163,17 +208,33 @@ export default function ValidatePayments() {
           </section>
 
           <section>
-            <h2 className="mb-3 font-display text-lg font-bold">Tous les paiements manuels</h2>
+            <h2 className="mb-1 font-display text-lg font-bold">Tous les paiements</h2>
+            <p className="mb-3 text-xs text-ink/45">
+              Tous les modes confondus — espèces, chèque, virement, Moov Money, Airtel Money. Cliquez sur une colonne pour trier.
+            </p>
             {payments.length === 0 ? (
               <EmptyState title="Aucun paiement" />
             ) : (
               <div className="card overflow-x-auto">
                 <table className="table-base">
                   <thead>
-                    <tr><th>Client</th><th>Montant</th><th>Mode</th><th>Référence</th><th>Statut</th><th className="text-right">Actions</th></tr>
+                    <tr>
+                      {COLUMNS.map((c) => (
+                        <th key={c.key}>
+                          <button
+                            onClick={() => toggleSort(c.key)}
+                            className="flex items-center gap-1 font-semibold hover:text-accent"
+                          >
+                            {c.label}
+                            <LuArrowUpDown size={12} className={sortKey === c.key ? "text-accent" : "text-ink/30"} />
+                          </button>
+                        </th>
+                      ))}
+                      <th className="text-right">Actions</th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {payments.map((p) => (
+                    {sortedPayments.map((p) => (
                       <tr key={p.id_paiement}>
                         <td className="font-medium">
                           {p.reservation?.client ? `${p.reservation.client.prenom} ${p.reservation.client.nom}` : `Réservation #${p.id_reservation}`}
@@ -181,14 +242,26 @@ export default function ValidatePayments() {
                         <td>{formatMoney(p.montant)}</td>
                         <td>{MODE_PAIEMENT_LABELS[p.mode_paiement] ?? p.mode_paiement}</td>
                         <td className="font-mono text-xs">{p.reference}</td>
+                        <td className="text-xs text-ink/55">{formatDateTime(p.date_paiement)}</td>
                         <td><StatutBadge statut={p.statut} /></td>
                         <td className="text-right">
-                          {p.statut === "encaisse" && (
-                            <div className="flex justify-end gap-2">
-                              <button className="btn-dark px-3 py-1.5 text-xs" onClick={() => validate(p)}>Valider</button>
-                              <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => cancel(p)}>Annuler</button>
-                            </div>
-                          )}
+                          <div className="flex justify-end gap-2">
+                            {p.facture && (
+                              <button
+                                className="btn-outline flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                                onClick={() => setPreviewId(p.facture.id_facture)}
+                                title="Aperçu de la facture"
+                              >
+                                <LuFileText size={13} />
+                              </button>
+                            )}
+                            {p.statut === "encaisse" && (
+                              <>
+                                <button className="btn-dark px-3 py-1.5 text-xs" onClick={() => validate(p)}>Valider</button>
+                                <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => cancel(p)}>Annuler</button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -247,6 +320,8 @@ export default function ValidatePayments() {
           </div>
         )}
       </Modal>
+
+      <InvoicePreviewModal invoiceId={previewId} onClose={() => setPreviewId(null)} />
     </>
   );
 }

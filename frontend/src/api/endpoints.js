@@ -121,6 +121,7 @@ export const ENDPOINTS = {
     ask: "/chatbot/ask",   // public
     // Messagerie (auth:sanctum)
     start: "/chatbot/conversation/start",
+    startForClient: "/chatbot/conversation/start-for-client", // staff uniquement
     send: "/chatbot/message",
     conversations: "/chatbot/conversations",
     messages: (id) => `/chatbot/conversations/${id}/messages`,
