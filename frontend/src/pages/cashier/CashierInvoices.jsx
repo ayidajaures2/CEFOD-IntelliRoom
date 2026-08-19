@@ -1,101 +1,169 @@
-import { useEffect, useState } from "react";
-import { fetchInvoices } from "../../api/invoiceApi";
-import { extractList } from "../../utils/extract";
+import { useCallback, useEffect, useState } from "react";
+import { fetchPendingPayments, recordPayment } from "../../api/paymentApi";
+import { fetchAllBookings } from "../../api/bookingApi";
 import { useNotify } from "../../contexts/NotificationContext";
+import { usePolling } from "../../hooks/usePolling";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
-import InvoicePreviewModal from "../../components/common/InvoicePreviewModal";
-import { formatDate } from "../../utils/formatDate";
+import StatutBadge from "../../components/common/StatutBadge";
+import Modal from "../../components/common/Modal";
+import LiveIndicator from "../../components/common/LiveIndicator";
 import { formatMoney } from "../../utils/formatMoney";
-import { MODE_PAIEMENT_LABELS } from "../../utils/constants";
-import { LuEye } from "react-icons/lu";
+import { formatDateTime } from "../../utils/formatDate";
+import { apiErrorMessage } from "../../utils/apiError";
+import { extractList } from "../../utils/extract";
 
 /**
- * Consultation des factures émises (caissier) — lecture seule.
- * ⚠ Pas de bouton téléchargement : InvoiceController::canDownload() exclut
- * le caissier (seuls admin/comptabilité téléchargent, plus le client pour
- * les siennes).
+ * Le caissier n'encaisse QUE les espèces (chèque/virement sont enregistrés
+ * directement par la comptabilité, voir pages/accounting/). Il ne valide
+ * plus rien lui-même — l'encaissement passe au statut "encaisse" et attend
+ * la validation de la comptabilité (pages/accounting/ValidatePayments.jsx).
  */
-export default function CashierInvoices() {
-  const { error: toastError } = useNotify();
-  const [invoices, setInvoices] = useState([]);
+export default function CashierPayments() {
+  const { success, error: toastError } = useNotify();
+  const [payments, setPayments] = useState([]);
+  const [toCollect, setToCollect] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [previewId, setPreviewId] = useState(null);
+  const [collecting, setCollecting] = useState(null);
+  const [form, setForm] = useState({ montant: "", reference: "" });
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    fetchInvoices()
-      .then(({ data }) => setInvoices(extractList(data)))
-      .catch(() => toastError("Impossible de charger les factures."))
-      .finally(() => setLoading(false));
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    try {
+      const [p, b] = await Promise.all([fetchPendingPayments(), fetchAllBookings()]);
+      setPayments(extractList(p.data));
+      const bookings = extractList(b.data);
+      setToCollect(bookings.filter((x) => x.statut === "validee"));
+    } catch {
+      toastError("Impossible de charger les données de caisse.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, [toastError]);
+  useEffect(() => { load(); }, [load]);
+  usePolling(() => load({ silent: true }), 8000);
 
-  const filtered = invoices.filter((f) => {
-    if (!search) return true;
-    const client = f.paiement?.reservation?.client;
-    const hay = `${f.numero_facture} ${client?.nom ?? ""} ${client?.prenom ?? ""} ${f.paiement?.mode_paiement ?? ""}`.toLowerCase();
-    return hay.includes(search.toLowerCase());
-  });
+  const openCollect = (b) => {
+    setCollecting(b);
+    setForm({ montant: b.montant_du ?? "", reference: "" });
+  };
+
+  const submitCollect = async () => {
+    setBusy(true);
+    try {
+      await recordPayment({
+        id_reservation: collecting.id_reservation,
+        montant: Number(form.montant),
+        reference: form.reference.trim(),
+      });
+      success("Paiement encaissé. En attente de validation par la comptabilité.");
+      setCollecting(null);
+      load({ silent: true });
+    } catch (e) {
+      toastError(apiErrorMessage(e, "Enregistrement impossible."));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
       <PageHeader
         eyebrow="Caisse"
-        title="Factures"
-        subtitle="Consultation seule. Le téléchargement est réservé à l'administration et à la comptabilité."
-      />
-      <input
-        className="field mb-4 max-w-sm"
-        placeholder="Rechercher (n°, client ou mode)…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        aria-label="Rechercher une facture"
+        title="Paiements — espèces"
+        subtitle="Encaissement présentiel uniquement. La comptabilité valide ensuite chaque encaissement avant confirmation de la réservation."
+        actions={<LiveIndicator />}
       />
       {loading && <Loader />}
-      {!loading && filtered.length === 0 && <EmptyState title="Aucune facture" hint="Les factures apparaissent ici après validation d'un paiement." />}
-      {filtered.length > 0 && (
-        <div className="card overflow-x-auto">
-          <table className="table-base">
-            <thead>
-              <tr>
-                <th>N°</th>
-                <th>Client</th>
-                <th>Émise le</th>
-                <th>Montant</th>
-                <th>Mode</th>
-                <th className="text-right">Aperçu</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((f) => {
-                const client = f.paiement?.reservation?.client;
-                const modePaiement = f.paiement?.mode_paiement;
-                return (
-                  <tr key={f.id_facture}>
-                    <td className="font-mono font-medium">{f.numero_facture}</td>
-                    <td>{client ? `${client.prenom} ${client.nom}` : "—"}</td>
-                    <td>{formatDate(f.date_emission)}</td>
-                    <td>{formatMoney(f.paiement?.montant)}</td>
-                    <td className="text-ink/60">{MODE_PAIEMENT_LABELS[modePaiement] ?? modePaiement ?? "—"}</td>
-                    <td className="text-right">
-                      <button
-                        onClick={() => setPreviewId(f.id_facture)}
-                        className="btn-outline px-2.5 py-1.5 text-xs"
-                        title="Aperçu"
-                      >
-                        <LuEye size={13} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+
+      {!loading && (
+        <div className="flex flex-col gap-8">
+          <section>
+            <h2 className="mb-3 font-display text-lg font-bold">Réservations validées — à encaisser</h2>
+            {toCollect.length === 0 ? (
+              <EmptyState title="Rien à encaisser" hint="Les réservations validées en attente de paiement s'affichent ici." />
+            ) : (
+              <div className="card overflow-x-auto">
+                <table className="table-base">
+                  <thead>
+                    <tr><th>Client</th><th>Salle</th><th>Période</th><th className="text-right">Action</th></tr>
+                  </thead>
+                  <tbody>
+                    {toCollect.map((b, i) => (
+                      <tr key={b.id_reservation} className="stagger-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
+                        <td className="font-medium">
+                          {b.client ? `${b.client.prenom} ${b.client.nom}` : `Client #${b.id_client}`}
+                        </td>
+                        <td>{b.salle?.nom_salle ?? `salle #${b.id_salle}`}</td>
+                        <td className="text-xs text-ink/50">
+                          {formatDateTime(b.date_debut)} → {formatDateTime(b.date_fin)}
+                        </td>
+                        <td className="text-right">
+                          <button className="btn-primary px-3 py-1.5 text-xs" onClick={() => openCollect(b)}>Encaisser (espèces)</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section>
+            <h2 className="mb-3 font-display text-lg font-bold">Encaissements récents</h2>
+            {payments.length === 0 ? (
+              <EmptyState title="Aucun encaissement" />
+            ) : (
+              <div className="card overflow-x-auto">
+                <table className="table-base">
+                  <thead>
+                    <tr><th>Montant</th><th>Référence</th><th>Statut</th></tr>
+                  </thead>
+                  <tbody>
+                    {payments.map((p, i) => (
+                      <tr key={p.id_paiement} className="stagger-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
+                        <td className="font-medium">{formatMoney(p.montant)}</td>
+                        <td className="font-mono text-xs">{p.reference}</td>
+                        <td><StatutBadge statut={p.statut} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </div>
       )}
 
-      <InvoicePreviewModal invoiceId={previewId} onClose={() => setPreviewId(null)} />
+      <Modal open={Boolean(collecting)} title="Encaisser un paiement en espèces" onClose={() => setCollecting(null)}>
+        {collecting && (
+          <div className="space-y-4">
+            <p className="text-sm text-ink/60">
+              {collecting.client ? `${collecting.client.prenom} ${collecting.client.nom}` : "Client"} —{" "}
+              {collecting.salle?.nom_salle ?? `salle #${collecting.id_salle}`}
+            </p>
+            <div>
+              <label className="field-label" htmlFor="montant">Montant reçu (FCFA)</label>
+              <input id="montant" type="number" min="0" className="field" value={form.montant}
+                onChange={(e) => setForm((f) => ({ ...f, montant: e.target.value }))} />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="reference">Référence du reçu <span className="text-red-500">*</span></label>
+              <input id="reference" className="field" value={form.reference}
+                onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
+                placeholder="Numéro inscrit sur le reçu remis au client" required />
+              <p className="mt-1 text-xs text-ink/45">
+                Obligatoire et unique — c'est ce numéro que la comptabilité vérifiera avant de valider.
+              </p>
+            </div>
+            <button className="btn-primary w-full" onClick={submitCollect} disabled={busy || !form.montant || !form.reference.trim()}>
+              {busy ? "Enregistrement…" : "Enregistrer l'encaissement"}
+            </button>
+          </div>
+        )}
+      </Modal>
     </>
   );
 }

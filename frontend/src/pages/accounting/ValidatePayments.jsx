@@ -7,18 +7,20 @@ import {
 } from "../../api/paymentApi";
 import { fetchAllBookings } from "../../api/bookingApi";
 import { useNotify } from "../../contexts/NotificationContext";
+import { usePolling } from "../../hooks/usePolling";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
 import StatutBadge from "../../components/common/StatutBadge";
 import Modal from "../../components/common/Modal";
 import InvoicePreviewModal from "../../components/common/InvoicePreviewModal";
+import LiveIndicator from "../../components/common/LiveIndicator";
 import { formatMoney } from "../../utils/formatMoney";
 import { formatDateTime } from "../../utils/formatDate";
 import { MODE_PAIEMENT_LABELS } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
 import { extractList } from "../../utils/extract";
-import { LuRefreshCw, LuArrowUpDown, LuFileText } from "react-icons/lu";
+import { LuArrowUpDown, LuFileText } from "react-icons/lu";
 
 const MODES_COMPTABILITE = [
   { value: "cheque", label: "Chèque" },
@@ -46,7 +48,6 @@ export default function ValidatePayments() {
   const [payments, setPayments] = useState([]);
   const [toRecord, setToRecord] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   const [recording, setRecording] = useState(null);
   const [form, setForm] = useState({ montant: "", mode_paiement: "cheque", reference: "" });
@@ -57,8 +58,7 @@ export default function ValidatePayments() {
   const [previewId, setPreviewId] = useState(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
-    if (silent) setRefreshing(true);
-    else setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const [p, b] = await Promise.all([fetchAccountingPayments(), fetchAllBookings()]);
       setPayments(extractList(p.data));
@@ -73,11 +73,11 @@ export default function ValidatePayments() {
     } catch {
       toastError("Impossible de charger les données comptables.");
     } finally {
-      if (silent) setRefreshing(false);
-      else setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [toastError]);
   useEffect(() => { load(); }, [load]);
+  usePolling(() => load({ silent: true }), 20000);
 
   const openRecord = (b) => {
     setRecording(b);
@@ -160,16 +160,7 @@ export default function ValidatePayments() {
         eyebrow="Comptabilité"
         title="Paiements"
         subtitle="Enregistrez chèque/virement, puis validez après vérification de conformité — quel que soit le mode."
-        actions={
-          <button
-            className="btn-outline flex items-center gap-1.5"
-            onClick={() => load({ silent: true })}
-            disabled={refreshing}
-          >
-            <LuRefreshCw className={refreshing ? "animate-spin" : ""} size={16} />
-            Actualiser
-          </button>
-        }
+        actions={<LiveIndicator />}
       />
 
       {loading && <Loader />}
@@ -187,8 +178,8 @@ export default function ValidatePayments() {
                     <tr><th>Client</th><th>Salle</th><th>Période</th><th className="text-right">Action</th></tr>
                   </thead>
                   <tbody>
-                    {toRecord.map((b) => (
-                      <tr key={b.id_reservation}>
+                    {toRecord.map((b, i) => (
+                      <tr key={b.id_reservation} className="stagger-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
                         <td className="font-medium">
                           {b.client ? `${b.client.prenom} ${b.client.nom}` : `Client #${b.id_client}`}
                         </td>
@@ -234,8 +225,8 @@ export default function ValidatePayments() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedPayments.map((p) => (
-                      <tr key={p.id_paiement}>
+                    {sortedPayments.map((p, i) => (
+                      <tr key={p.id_paiement} className="stagger-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
                         <td className="font-medium">
                           {p.reservation?.client ? `${p.reservation.client.prenom} ${p.reservation.client.nom}` : `Réservation #${p.id_reservation}`}
                         </td>

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchAllBookings, validateBooking, cancelBooking, updateBooking } from "../../api/bookingApi";
 import { useNotify } from "../../contexts/NotificationContext";
+import { usePolling } from "../../hooks/usePolling";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
 import StatutBadge from "../../components/common/StatutBadge";
+import LiveIndicator from "../../components/common/LiveIndicator";
 import { formatDateTime } from "../../utils/formatDate";
 import { formatMoney } from "../../utils/formatMoney";
 import {
@@ -17,7 +19,7 @@ import {
   NOMBRE_FEMMES_LABELS,
 } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
-import { LuRefreshCw, LuEye } from "react-icons/lu";
+import { LuEye } from "react-icons/lu";
 
 const FILTERS = ["", "en_attente", "validee", "confirmee", "annulee"];
 
@@ -30,7 +32,6 @@ export default function ManageBookings() {
   const { success, error: toastError } = useNotify();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState("");
 
   const [noteModal, setNoteModal] = useState(null);
@@ -40,8 +41,7 @@ export default function ManageBookings() {
   const [detailModal, setDetailModal] = useState(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
-    if (silent) setRefreshing(true);
-    else setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const { data } = await fetchAllBookings(filter ? { statut: filter } : undefined);
       let list = Array.isArray(data) ? data : data.data ?? [];
@@ -50,14 +50,18 @@ export default function ManageBookings() {
     } catch {
       toastError("Impossible de charger les réservations.");
     } finally {
-      if (silent) setRefreshing(false);
-      else setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [filter, toastError]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Rafraîchissement automatique en arrière-plan (silencieux, pas de
+  // spinner plein écran) — le bouton "Actualiser" reste disponible pour
+  // forcer une mise à jour immédiate.
+  usePolling(() => load({ silent: true }), 20000);
 
   const act = async (fn, b, message) => {
     try {
@@ -102,16 +106,7 @@ export default function ManageBookings() {
         eyebrow="Secrétariat Général"
         title="Demandes de réservation"
         subtitle="Vérifiez la disponibilité et la catégorie du client avant de valider. Le client paie après validation."
-        actions={
-          <button
-            className="btn-outline flex items-center gap-1.5"
-            onClick={() => load({ silent: true })}
-            disabled={refreshing}
-          >
-            <LuRefreshCw className={refreshing ? "animate-spin" : ""} size={16} />
-            Actualiser
-          </button>
-        }
+        actions={<LiveIndicator />}
       />
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -142,8 +137,8 @@ export default function ManageBookings() {
               </tr>
             </thead>
             <tbody>
-              {bookings.map((b) => (
-                <tr key={b.id_reservation}>
+              {bookings.map((b, i) => (
+                <tr key={b.id_reservation} className="stagger-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
                   <td className="font-medium">{b.client ? `${b.client.prenom} ${b.client.nom}` : `#${b.id_client}`}</td>
                   <td className="text-ink/60">{CATEGORIE_CLIENT_LABELS[b.client?.categorie_client] ?? "—"}</td>
                   <td>{b.salle?.nom_salle ?? `#${b.id_salle}`}</td>

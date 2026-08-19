@@ -9,6 +9,7 @@ export const fetchAdminRevenueMonthly = () => api.get(ENDPOINTS.charts.adminReve
 // Réception
 export const fetchReceptionChart = () => api.get(ENDPOINTS.charts.receptionChart);
 export const fetchReceptionOccupancy = () => api.get(ENDPOINTS.charts.receptionOccupancy);
+export const fetchReceptionMessagingStats = () => api.get(ENDPOINTS.charts.receptionMessagingStats);
 // SG
 export const fetchSgChart = () => api.get(ENDPOINTS.charts.sgChart);
 // Caisse

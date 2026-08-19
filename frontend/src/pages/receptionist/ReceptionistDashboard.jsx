@@ -6,10 +6,10 @@ import { usePolling } from "../../hooks/usePolling";
 import PageHeader from "../../components/common/PageHeader";
 import StatutBadge from "../../components/common/StatutBadge";
 import { formatDateTime } from "../../utils/formatDate";
-import { fetchReceptionChart, fetchReceptionOccupancy } from "../../api/chartApi";
+import { fetchReceptionChart, fetchReceptionOccupancy, fetchReceptionMessagingStats } from "../../api/chartApi";
 import { StackedBars, DonutChart, BarsChart, ChartCard } from "../../components/common/Charts";
 import StatCard from "../../components/common/StatCard";
-import { LuHourglass, LuCircleCheck, LuBuilding2 } from "react-icons/lu";
+import { LuMessageSquare, LuCircleCheck, LuBuilding2, LuUsers } from "react-icons/lu";
 
 export default function ReceptionistDashboard() {
   const [bookings, setBookings] = useState([]);
@@ -31,6 +31,15 @@ export default function ReceptionistDashboard() {
     fetchReceptionOccupancy().then(({ data }) => setOcc(Array.isArray(data) ? data : data.data ?? [])).catch(() => {});
   }, []);
 
+  const [messagingStats, setMessagingStats] = useState({ pendingConversations: 0, totalClients: 0 });
+  const loadMessagingStats = useCallback(async () => {
+    try {
+      const { data } = await fetchReceptionMessagingStats();
+      setMessagingStats(data);
+    } catch { /* réessayé au prochain tick */ }
+  }, []);
+  usePolling(loadMessagingStats, 20000);
+
   const pending = bookings.filter((b) => b.statut === "en_attente");
   const occupied = rooms.filter((r) => (r.statut_effectif ?? r.statut) === "occupee").length;
   const free = rooms.filter((r) => (r.statut_effectif ?? r.statut) === "libre").length;
@@ -51,22 +60,27 @@ export default function ReceptionistDashboard() {
       <PageHeader
         eyebrow="Réception"
         title="Tableau de bord"
-        actions={<Link to="/reception/reservations" className="btn-primary">Voir les réservations</Link>}
+        actions={<Link to="/reception/reservations" className="btn-primary">Consulter les réservations</Link>}
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Demandes en attente" value={pending.length} icon={LuHourglass}/>
+      <div className="mb-2 grid gap-4 sm:grid-cols-3">
+        <StatCard label="Conversations en attente de réponse" value={messagingStats.pendingConversations} icon={LuMessageSquare} />
         <StatCard label="Salles libres maintenant" value={free} icon={LuCircleCheck} />
         <StatCard label="Salles occupées" value={occupied} icon={LuBuilding2} />
       </div>
 
+      <p className="mb-6 flex items-center gap-1.5 text-sm text-ink/50">
+        <LuUsers size={14} />
+        {messagingStats.totalClients} client{messagingStats.totalClients > 1 ? "s" : ""} inscrit{messagingStats.totalClients > 1 ? "s" : ""}
+      </p>
+
       <section className="card p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-lg font-bold">Dernières demandes en attente</h2>
+          <h2 className="font-display text-lg font-bold">Dernières demandes reçues</h2>
           <Link to="/reception/reservations" className="text-sm font-medium text-accent hover:text-accent-dark">Tout voir</Link>
         </div>
         {pending.length === 0 ? (
-          <p className="py-6 text-center text-sm text-ink/45">Aucune demande à traiter.</p>
+          <p className="py-6 text-center text-sm text-ink/45">Aucune demande en attente.</p>
         ) : (
           <ul className="divide-y divide-ink/5">
             {pending.slice(0, 6).map((b) => (

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchUsers, createUser, updateUser, deleteUser } from "../../api/userApi";
+import { fetchUsers, createUser, updateUser, deleteUser, suspendUser, reactivateUser } from "../../api/userApi";
 import { useNotify } from "../../contexts/NotificationContext";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
@@ -13,7 +13,7 @@ import {
   ROLE_LABELS,
 } from "../../utils/constants";
 import { apiErrorMessage } from "../../utils/apiError";
-import { LuRefreshCw } from "react-icons/lu";
+import { LuRefreshCw, LuBan, LuRotateCcw } from "react-icons/lu";
 
 const EMPTY = {
   nom: "", prenom: "", email: "", telephone: "",
@@ -22,12 +22,17 @@ const EMPTY = {
 
 /**
  * Gestion des comptes (AdminController). C'est ICI — et uniquement ici —
- * que la sous_categorie_client d'un client peut être corrigée (le palier
- * tarifaire categorie_client est dérivé automatiquement côté backend, ne se
- * saisit jamais directement), et que les comptes du personnel sont créés
- * (SG, comptabilité, réceptionniste, caissier, admin — CLAUDE.md §1 & §5).
- * L'email n'est JAMAIS éditable ici : immuable après création, pour tous
- * les rôles, y compris depuis cet écran admin.
+ * que la sous_categorie_client d'un client peut être corrigée, que les
+ * comptes du personnel sont créés, et qu'un compte peut être suspendu.
+ * L'e-mail est immuable après création, pour tous les rôles.
+ *
+ * Bouton manuel plutôt que polling : page de gestion, change rarement,
+ * pas d'enjeu de fraîcheur seconde-par-seconde.
+ *
+ * Suspension : bloque la connexion (AuthController::login()) ET révoque
+ * immédiatement les tokens Sanctum existants (déconnexion multi-appareils
+ * instantanée). Un admin ne peut suspendre ni son propre compte ni un
+ * autre compte admin (garde-fou backend, reflété ici côté UI).
  */
 export default function ManageUsers() {
   const { success, error: toastError } = useNotify();
@@ -39,6 +44,7 @@ export default function ManageUsers() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
+  const [suspendingId, setSuspendingId] = useState(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
@@ -69,9 +75,6 @@ export default function ManageUsers() {
 
   const submit = async () => {
     setBusy(true);
-    // email volontairement absent du payload : immuable, jamais envoyé même
-    // en édition (le backend l'ignorerait de toute façon, mais autant ne
-    // pas prétendre que ce champ est modifiable côté formulaire).
     const { email, ...rest } = form;
     const payload = { ...rest };
     if (payload.role !== ROLES.CLIENT) payload.sous_categorie_client = null;
@@ -84,7 +87,7 @@ export default function ManageUsers() {
         await updateUser(editing.id_utilisateur, payload);
         success("Utilisateur mis à jour.");
       } else {
-        await createUser(form); // à la création, l'email est requis
+        await createUser(form);
         success("Compte créé.");
       }
       setEditing(null);
@@ -108,6 +111,28 @@ export default function ManageUsers() {
     }
   };
 
+  const toggleSuspension = async (u) => {
+    const suspending = !u.est_suspendu;
+    if (suspending && !window.confirm(`Suspendre le compte de ${u.prenom} ${u.nom} ? Il sera déconnecté immédiatement et ne pourra plus se reconnecter tant que le compte est suspendu.`)) {
+      return;
+    }
+    setSuspendingId(u.id_utilisateur);
+    try {
+      if (suspending) {
+        await suspendUser(u.id_utilisateur);
+        success(`Compte de ${u.prenom} ${u.nom} suspendu.`);
+      } else {
+        await reactivateUser(u.id_utilisateur);
+        success(`Compte de ${u.prenom} ${u.nom} réactivé.`);
+      }
+      load({ silent: true });
+    } catch (e) {
+      toastError(apiErrorMessage(e, "Action impossible."));
+    } finally {
+      setSuspendingId(null);
+    }
+  };
+
   const filtered = roleFilter ? users.filter((u) => u.role === roleFilter) : users;
   const isClientRole = form.role === ROLES.CLIENT;
 
@@ -116,7 +141,7 @@ export default function ManageUsers() {
       <PageHeader
         eyebrow="Administration"
         title="Utilisateurs"
-        subtitle="Créez les comptes du personnel et corrigez la sous-catégorie déclarée des clients. L'e-mail est immuable après création."
+        subtitle="Créez les comptes du personnel, corrigez la sous-catégorie déclarée des clients, suspendez un compte si besoin. L'e-mail est immuable après création."
         actions={
           <>
             <button
@@ -135,7 +160,7 @@ export default function ManageUsers() {
       <div className="mb-4 flex flex-wrap gap-2">
         {["", ...Object.values(ROLES)].map((r) => (
           <button key={r || "tous"} onClick={() => setRoleFilter(r)}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${
+            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
               roleFilter === r ? "bg-ink text-paper" : "border border-ink/15 hover:border-accent hover:text-accent"
             }`}>
             {r ? ROLE_LABELS[r] : "Tous"}
@@ -150,11 +175,11 @@ export default function ManageUsers() {
         <div className="card overflow-x-auto">
           <table className="table-base">
             <thead>
-              <tr><th>Nom</th><th>E-mail</th><th>Téléphone</th><th>Rôle</th><th>Catégorie</th><th className="text-right">Actions</th></tr>
+              <tr><th>Nom</th><th>E-mail</th><th>Téléphone</th><th>Rôle</th><th>Catégorie</th><th>Statut</th><th className="text-right">Actions</th></tr>
             </thead>
             <tbody>
-              {filtered.map((u) => (
-                <tr key={u.id_utilisateur}>
+              {filtered.map((u, i) => (
+                <tr key={u.id_utilisateur} className={`stagger-in ${u.est_suspendu ? "opacity-60" : ""}`} style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
                   <td className="font-medium">{u.prenom} {u.nom}</td>
                   <td className="text-ink/60">{u.email}</td>
                   <td className="text-ink/60">{u.telephone ?? "—"}</td>
@@ -172,9 +197,27 @@ export default function ManageUsers() {
                       ?? CATEGORIE_CLIENT_LABELS[u.categorie_client]
                       ?? "—"}
                   </td>
+                  <td>
+                    {u.est_suspendu ? (
+                      <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">Suspendu</span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Actif</span>
+                    )}
+                  </td>
                   <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => openEdit(u)}>Modifier</button>
+                      {u.role !== ROLES.ADMIN && (
+                        <button
+                          className={`btn-outline flex items-center gap-1 px-3 py-1.5 text-xs ${u.est_suspendu ? "" : "text-red-600"}`}
+                          onClick={() => toggleSuspension(u)}
+                          disabled={suspendingId === u.id_utilisateur}
+                          title={u.est_suspendu ? "Réactiver ce compte" : "Suspendre ce compte"}
+                        >
+                          {u.est_suspendu ? <LuRotateCcw size={13} /> : <LuBan size={13} />}
+                          {u.est_suspendu ? "Réactiver" : "Suspendre"}
+                        </button>
+                      )}
                       <button className="btn-ghost px-3 py-1.5 text-xs text-accent-dark" onClick={() => remove(u)}>Supprimer</button>
                     </div>
                   </td>

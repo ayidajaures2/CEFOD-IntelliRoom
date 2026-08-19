@@ -2,16 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchPendingPayments, recordPayment } from "../../api/paymentApi";
 import { fetchAllBookings } from "../../api/bookingApi";
 import { useNotify } from "../../contexts/NotificationContext";
+import { usePolling } from "../../hooks/usePolling";
 import PageHeader from "../../components/common/PageHeader";
 import Loader from "../../components/common/Loader";
 import EmptyState from "../../components/common/EmptyState";
 import StatutBadge from "../../components/common/StatutBadge";
 import Modal from "../../components/common/Modal";
+import LiveIndicator from "../../components/common/LiveIndicator";
 import { formatMoney } from "../../utils/formatMoney";
 import { formatDateTime } from "../../utils/formatDate";
 import { apiErrorMessage } from "../../utils/apiError";
 import { extractList } from "../../utils/extract";
-import { LuRefreshCw } from "react-icons/lu";
 
 /**
  * Le caissier n'encaisse QUE les espèces (chèque/virement sont enregistrés
@@ -24,14 +25,12 @@ export default function CashierPayments() {
   const [payments, setPayments] = useState([]);
   const [toCollect, setToCollect] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [collecting, setCollecting] = useState(null);
   const [form, setForm] = useState({ montant: "", reference: "" });
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async ({ silent = false } = {}) => {
-    if (silent) setRefreshing(true);
-    else setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const [p, b] = await Promise.all([fetchPendingPayments(), fetchAllBookings()]);
       setPayments(extractList(p.data));
@@ -40,11 +39,11 @@ export default function CashierPayments() {
     } catch {
       toastError("Impossible de charger les données de caisse.");
     } finally {
-      if (silent) setRefreshing(false);
-      else setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [toastError]);
   useEffect(() => { load(); }, [load]);
+  usePolling(() => load({ silent: true }), 20000);
 
   const openCollect = (b) => {
     setCollecting(b);
@@ -75,16 +74,7 @@ export default function CashierPayments() {
         eyebrow="Caisse"
         title="Paiements — espèces"
         subtitle="Encaissement présentiel uniquement. La comptabilité valide ensuite chaque encaissement avant confirmation de la réservation."
-        actions={
-          <button
-            className="btn-outline flex items-center gap-1.5"
-            onClick={() => load({ silent: true })}
-            disabled={refreshing}
-          >
-            <LuRefreshCw className={refreshing ? "animate-spin" : ""} size={16} />
-            Actualiser
-          </button>
-        }
+        actions={<LiveIndicator />}
       />
       {loading && <Loader />}
 
@@ -101,8 +91,8 @@ export default function CashierPayments() {
                     <tr><th>Client</th><th>Salle</th><th>Période</th><th className="text-right">Action</th></tr>
                   </thead>
                   <tbody>
-                    {toCollect.map((b) => (
-                      <tr key={b.id_reservation}>
+                    {toCollect.map((b, i) => (
+                      <tr key={b.id_reservation} className="stagger-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
                         <td className="font-medium">
                           {b.client ? `${b.client.prenom} ${b.client.nom}` : `Client #${b.id_client}`}
                         </td>
@@ -132,8 +122,8 @@ export default function CashierPayments() {
                     <tr><th>Montant</th><th>Référence</th><th>Statut</th></tr>
                   </thead>
                   <tbody>
-                    {payments.map((p) => (
-                      <tr key={p.id_paiement}>
+                    {payments.map((p, i) => (
+                      <tr key={p.id_paiement} className="stagger-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
                         <td className="font-medium">{formatMoney(p.montant)}</td>
                         <td className="font-mono text-xs">{p.reference}</td>
                         <td><StatutBadge statut={p.statut} /></td>

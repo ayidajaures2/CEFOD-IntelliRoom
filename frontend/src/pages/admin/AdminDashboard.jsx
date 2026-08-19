@@ -83,7 +83,13 @@ export default function AdminDashboard() {
           </div>
 
           <section className="card p-5">
-            <h2 className="mb-3 font-display text-lg font-bold">Dernières réservations</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-display text-lg font-bold">Dernières réservations</h2>
+              <Link to="/admin/reservations" className="text-sm font-medium text-accent hover:text-accent-dark">
+                Voir tout l'historique →
+              </Link>
+            </div>
+            <p className="mb-3 text-xs text-ink/45">Aperçu des 8 plus récentes, tous statuts confondus.</p>
             {recent.length === 0 ? (
               <p className="py-6 text-center text-sm text-ink/45">Aucune réservation enregistrée.</p>
             ) : (

@@ -49,6 +49,7 @@ import CashierInvoices from "./pages/cashier/CashierInvoices"; // ✅ AJOUT
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminBookings from "./pages/admin/AdminBookings";
 import ManageRooms from "./pages/admin/ManageRooms";
 import ManageServices from "./pages/admin/ManageServices";
 import ManageUsers from "./pages/admin/ManageUsers";
@@ -136,6 +137,7 @@ export default function App() {
       <Route element={<PrivateRoute roles={[ROLES.ADMIN]} />}>
         <Route element={<DashboardLayout />}>
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/reservations" element={<AdminBookings />} />
           <Route path="/admin/salles" element={<ManageRooms />} />
           <Route path="/admin/services" element={<ManageServices />} />
           <Route path="/admin/utilisateurs" element={<ManageUsers />} />

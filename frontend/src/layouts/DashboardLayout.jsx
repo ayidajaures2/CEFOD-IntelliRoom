@@ -45,7 +45,7 @@ const NAV_BY_ROLE = {
   ],
   [ROLES.SG]: [
     { to: "/sg", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
-    { to: "/sg/reservations", label: "Demandes à valider", icon: LuCalendarCheck },
+    { to: "/sg/reservations", label: "Réservations", icon: LuCalendarCheck },
     { to: "/sg/clients", label: "Clients", icon: LuUsers },
     { to: "/sg/profil", label: "Mon profil", icon: LuUser },
   ],
@@ -63,6 +63,7 @@ const NAV_BY_ROLE = {
   ],
   [ROLES.ADMIN]: [
     { to: "/admin", label: "Tableau de bord", end: true, icon: LuLayoutDashboard },
+    { to: "/admin/reservations", label: "Réservations", icon: LuCalendarCheck },
     { to: "/admin/salles", label: "Salles & tarifs", icon: LuBuilding2 },
     { to: "/admin/services", label: "Services annexes", icon: LuBoxes },
     { to: "/admin/utilisateurs", label: "Utilisateurs", icon: LuUsers },

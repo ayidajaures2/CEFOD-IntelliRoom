@@ -16,6 +16,10 @@ const FILTERS = ["", "en_attente", "validee", "confirmee", "annulee"];
  * rôle du SG depuis la refonte, voir pages/sg/ManageBookings.jsx). Cette
  * page sert uniquement à consulter l'état des réservations pour orienter
  * les clients et répondre à leurs questions.
+ *
+ * Bouton manuel plutôt que polling : page de consultation, sans enjeu de
+ * fraîcheur seconde-par-seconde — contrairement au SG/comptabilité/caisse,
+ * où deux personnes peuvent agir en même temps sur la même donnée.
  */
 export default function ManageBookings() {
   const { error: toastError } = useNotify();
@@ -67,7 +71,7 @@ export default function ManageBookings() {
           <button
             key={f || "tous"}
             onClick={() => setFilter(f)}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${
+            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
               filter === f ? "bg-ink text-paper" : "border border-ink/15 hover:border-accent hover:text-accent"
             }`}
           >
@@ -90,8 +94,8 @@ export default function ManageBookings() {
               </tr>
             </thead>
             <tbody>
-              {bookings.map((b) => (
-                <tr key={b.id_reservation}>
+              {bookings.map((b, i) => (
+                <tr key={b.id_reservation} className="stagger-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
                   <td className="font-medium">{b.client ? `${b.client.prenom} ${b.client.nom}` : `#${b.id_client}`}</td>
                   <td className="text-ink/60">{CATEGORIE_CLIENT_LABELS[b.client?.categorie_client] ?? "—"}</td>
                   <td>{b.salle?.nom_salle ?? `#${b.id_salle}`}</td>
